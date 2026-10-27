@@ -369,10 +369,15 @@ class CommunityBrowser(QWidget):
             for version in self._versions[:40]:
                 self._version_combo.addItem(version.label, version.id)
             available = bool(self._versions)
+            is_modpack = project_type == "modpack"
             self._version_combo.setEnabled(available)
-            self._install_button.setEnabled(available and self._instance_combo.count() > 0)
+            self._instance_combo.setEnabled(not is_modpack)
+            self._install_button.setText("下载并创建实例" if is_modpack else "安装到选中实例")
+            self._install_button.setEnabled(available and (is_modpack or self._instance_combo.count() > 0))
             if not available:
                 self._status.setText("没有匹配当前筛选条件的版本，试试放宽版本或加载器。")
+            elif is_modpack:
+                self._status.setText(f"共 {len(self._versions)} 个版本可选，整合包会下载并自动创建实例。")
             else:
                 self._status.setText(f"共 {len(self._versions)} 个版本可选。")
 
@@ -389,6 +394,60 @@ class CommunityBrowser(QWidget):
         )
 
     # ---------- 安装 ----------
+    def _install_modpack(self, project, version) -> None:
+        file = version.primary_file()
+        if file is None or not file.url:
+            show_toast(self, "该整合包版本没有可下载文件", "error")
+            return
+        self._install_button.set_loading(True, "下载中…")
+        self._install_button.setEnabled(False)
+        self._status.setText("正在下载整合包…")
+        filename = file.filename or f"{project.title}.mrpack"
+        destination = self.context.paths.cache / "modpacks" / filename
+
+        def work():
+            from pcl.modpack import import_modpack
+            from pcl.net.http import download_file
+
+            download_file(
+                self.context.client(),
+                file.url,
+                destination,
+                sha1=file.sha1 or None,
+                size=file.size or None,
+            )
+            return import_modpack(
+                destination,
+                self.context.paths,
+                self.context.config.download,
+                instance_manager=self.context.instances,
+                api_key=self.context.config.advanced.curseforge_api_key,
+                java_path=self.context.config.launch.java_path or None,
+                install_game=True,
+                name_override=project.title,
+            )
+
+        def done(result) -> None:
+            self._install_button.set_loading(False, "下载并创建实例")
+            self._install_button.setEnabled(True)
+            self.context.select_instance(result.instance.id)
+            self.refresh()
+            message = f"已创建实例 {result.instance.name}"
+            if result.downloaded:
+                message += f"，下载 {result.downloaded} 个文件"
+            if result.failed:
+                message += f"，{len(result.failed)} 个失败"
+            self._status.setText(message)
+            show_toast(self, message, "success" if not result.failed else "warning")
+
+        def failed(message: str) -> None:
+            self._install_button.set_loading(False, "下载并创建实例")
+            self._install_button.setEnabled(True)
+            self._status.setText(f"导入失败：{message}")
+            show_toast(self, message, "error")
+
+        self.tasks.submit(work, on_done=done, on_error=failed)
+
     def _install(self) -> None:
         project = self._current
         if project is None:
@@ -398,6 +457,10 @@ class CommunityBrowser(QWidget):
         version = next((item for item in self._versions if item.id == version_id), None)
         if version is None:
             show_toast(self, "请选择要安装的版本", "warning")
+            return
+        project_type = project.project_type or self._current_project_type()
+        if project_type == "modpack":
+            self._install_modpack(project, version)
             return
         instance_id = self._instance_combo.currentData()
         if not instance_id:
