@@ -44,9 +44,9 @@ class QuickTile(Card):
     ) -> None:
         super().__init__(parent, hover_lift=True, padding=12, spacing=0)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        # 徽标高度 + 内边距，低于该高度时上下两行文字会互相重叠
-        self.setMinimumHeight(40 + 12 * 2)
         row = QHBoxLayout()
+        # 布局默认带 9px 边距，会把徽标两侧挤窄、上下两行文字压到一起
+        row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(11)
         badge = QLabel(self)
         badge.setFixedSize(40, 40)
@@ -56,7 +56,8 @@ class QuickTile(Card):
             badge.setPixmap(_badge_pixmap(icon_name, self.palette().highlight().color(), 40))
         row.addWidget(badge)
         texts = QVBoxLayout()
-        texts.setSpacing(1)
+        texts.setContentsMargins(0, 0, 0, 0)
+        texts.setSpacing(3)
         name = QLabel(title, self)
         name.setStyleSheet("font-size: 14px; font-weight: 600;")
         hint = QLabel(subtitle, self)
