@@ -188,7 +188,16 @@ def import_modpack(
             report = VanillaInstaller(paths, options).install(parsed.mc_version)
             version_id = report.version_id
     except Exception as error:
-        warnings.append(f"游戏本体安装未完成：{error}")
+        # 声明了加载器却安装失败时不能退回原版：那样用户会以为整合包装好了，
+        # 实际启动的却是没有任何 Mod 的原版。这里直接回滚实例并报错。
+        try:
+            manager.delete(instance.id)
+        except Exception:  # noqa: BLE001 - 回滚失败也要把真正的错误抛出去
+            pass
+        raise ModpackError(
+            f"游戏本体/加载器安装失败：{error}",
+            detail=f"{parsed.loader} {parsed.loader_version}".strip(),
+        ) from error
 
     instance.version_id = version_id
     manager.save(instance)

@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
@@ -38,6 +39,20 @@ from pcl.version.loaders.util import library_tasks, maven_coord_path
 from pcl.version.manifest import VersionEntry
 
 log = get_logger(__name__)
+
+_TOKEN_PATTERN = re.compile(r"\{([A-Za-z0-9_]+)\}")
+
+
+def _version_at_least(version: str, target: str) -> bool:
+    """比较版本号，忽略后缀（如 1.20.5-pre1）。"""
+    def parts(text: str) -> tuple:
+        numbers: list[int] = []
+        for piece in str(text).split(".")[:3]:
+            digits = "".join(ch for ch in piece if ch.isdigit())
+            numbers.append(int(digits) if digits else 0)
+        return tuple(numbers)
+
+    return parts(version) >= parts(target)
 
 FORGE_MAVEN = "https://maven.minecraftforge.net"
 NEOFORGE_MAVEN = "https://maven.neoforged.net/releases"
@@ -326,6 +341,19 @@ class ForgeInstaller:
                 resolved[str(key)] = self._resolve_data_value(str(value), work_dir, side)
         return resolved
 
+    def _auto_java(self, mc_version: str):
+        """系统里没有可用 Java 时，按 MC 版本自动补装一个。"""
+        major = 21 if _version_at_least(mc_version, "1.20.5") else (17 if _version_at_least(mc_version, "1.18") else 8)
+        try:
+            from pcl.launch.java_installer import install_java
+
+            runtime = install_java(self.paths, major, self.options)
+        except Exception as error:  # noqa: BLE001 - 自动补装失败仍要给出明确报错
+            log.warning("自动安装 Java %s 失败：%s", major, error)
+            return None
+        log.info("已自动安装 Java %s：%s", major, runtime.path)
+        return runtime
+
     @staticmethod
     def _processor_main_class(jar_path: Path) -> str | None:
         try:
@@ -347,7 +375,10 @@ class ForgeInstaller:
         runtime = probe_java(Path(java_path)) if java_path else None
         runtime = runtime or find_java()
         if runtime is None:
-            raise JavaNotFoundError("安装 Forge 需要可用的 Java，请先在设置中指定。")
+            # PCL 的做法：缺少可用 Java 时自动补装一个对应版本，而不是直接失败
+            runtime = self._auto_java(profile.mc_version)
+        if runtime is None:
+            raise JavaNotFoundError("安装 Forge 需要可用的 Java，请先在设置中安装或指定。")
 
         data = self._build_data(profile, work_dir)
         minecraft_jar = self.paths.version_jar(profile.mc_version)
@@ -363,7 +394,9 @@ class ForgeInstaller:
             "LIBRARY_DIR": str(self.paths.libraries),
         }
         for key, value in data.items():
+            # Forge 的处理器参数同时存在 {BINPATCH} 与 {DATA_BINPATCH} 两种写法
             variables[f"DATA_{key}"] = value
+            variables.setdefault(str(key), value)
 
         for index, processor in enumerate(profile.processors, start=1):
             if not isinstance(processor, Mapping):
@@ -391,6 +424,12 @@ class ForgeInstaller:
                 raise LoaderError(f"处理器 jar 缺少 Main-Class：{jar_coord}")
 
             args = [str(self._substitute(arg, variables)) for arg in processor.get("args") or []]
+            unresolved = [token for token in _TOKEN_PATTERN.findall(" ".join(args)) if token not in variables]
+            if unresolved:
+                raise LoaderError(
+                    f"处理器参数缺少变量：{unresolved[0]}（install_profile.data 未声明）",
+                    detail=f"{jar_coord}",
+                )
             command = [
                 str(runtime.path),
                 "-cp",

@@ -44,6 +44,8 @@ class QuickTile(Card):
     ) -> None:
         super().__init__(parent, hover_lift=True, padding=12, spacing=0)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        # 徽标高度 + 内边距，低于该高度时上下两行文字会互相重叠
+        self.setMinimumHeight(40 + 12 * 2)
         row = QHBoxLayout()
         row.setSpacing(11)
         badge = QLabel(self)
@@ -187,7 +189,7 @@ class HomePage(BasePage):
     # ---------- 构建 ----------
     def _build(self) -> None:
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(28, 22, 24, 20)
+        outer.setContentsMargins(28, 22, 16, 20)
         outer.setSpacing(16)
 
         header = self.build_header()
@@ -198,6 +200,10 @@ class HomePage(BasePage):
         self._account_combo.setMinimumWidth(150)
         self._account_combo.currentIndexChanged.connect(self._on_account_changed)
         self._account_combo.setEditable(False)
+        # 宽度跟随最长条目，避免「Ashikaga（离线）」这类名字被截断
+        for widget in (self._instance_combo, self._account_combo):
+            widget.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+            widget.setMaximumWidth(360)
 
         for widget in (self._instance_combo, self._account_combo):
             header.addWidget(widget)
@@ -214,6 +220,11 @@ class HomePage(BasePage):
         settings_button.clicked.connect(lambda: self.window().navigate("settings") if hasattr(self.window(), "navigate") else None)
         header.addWidget(settings_button)
         outer.addLayout(header)
+
+        # 内容随窗口高度滚动，避免空间不足时卡片被压扁、文字重叠
+        scroll, content = self.make_scroll()
+        content.setContentsMargins(0, 0, 8, 0)
+        content.setSpacing(16)
 
         # 主卡片
         self._hero = HeroCard(self)
@@ -265,7 +276,7 @@ class HomePage(BasePage):
         self._hint_label.setStyleSheet("color: rgba(255,255,255,0.72); font-size: 12px;")
         info.addWidget(self._hint_label)
         hero_layout.addLayout(info, 1)
-        outer.addWidget(self._hero)
+        content.addWidget(self._hero)
 
         # 快捷入口 + 最近游玩
         bottom = QHBoxLayout()
@@ -308,8 +319,9 @@ class HomePage(BasePage):
         recent.addStretch(1)
         bottom.addWidget(recent, 2)
 
-        outer.addLayout(bottom)
-        outer.addStretch(1)
+        content.addLayout(bottom)
+        content.addStretch(1)
+        outer.addWidget(scroll, 1)
         self._refresh_choices()
 
     def _refresh_recent(self) -> None:
@@ -317,8 +329,10 @@ class HomePage(BasePage):
             item = self._recent_box.takeAt(0)
             widget = item.widget()
             if widget is not None:
+                # 立即脱离父级，否则 deleteLater 生效前旧磁贴仍会残留在卡片上
+                widget.setParent(None)
                 widget.deleteLater()
-        instances = self.context.instances.list_instances()[:4]
+        instances = self.context.instances.list_instances()[:3]
         if not instances:
             empty = QLabel("还没有实例，去「下载」安装一个吧。", self)
             empty.setObjectName("Muted")

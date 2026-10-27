@@ -196,6 +196,13 @@ class AppContext:
         if not self.paths.version_json(version_id).is_file():
             raise VersionNotFoundError(f"实例 {instance.name} 对应的版本 {version_id} 未安装。")
 
+        loader = str(instance.loader or "vanilla").lower()
+        if loader not in ("", "vanilla") and loader not in version_id.lower():
+            raise VersionNotFoundError(
+                f"实例 {instance.name} 声明的 {loader} 加载器尚未安装（当前版本 {version_id}），"
+                "请在下载页重新安装该加载器或重新导入整合包。"
+            )
+
         version_doc = resolve_version(self.paths, version_id)
         java = self.resolve_java(version_doc, instance)
         options = self.launch_options(instance)

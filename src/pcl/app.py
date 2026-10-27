@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import traceback
 
@@ -40,12 +41,24 @@ def _install_excepthook() -> None:
     sys.excepthook = hook
 
 
+def _quiet_qt_logs() -> None:
+    """屏蔽 Wayland 输入法等与功能无关的 Qt 噪音日志。"""
+    rule = "qt.qpa.wayland.textinput=false"
+    current = os.environ.get("QT_LOGGING_RULES", "")
+    if rule in current:
+        return
+    os.environ["QT_LOGGING_RULES"] = f"{current};{rule}" if current else rule
+
+
 def create_application(argv: list[str] | None = None) -> QApplication:
     """创建并配置 QApplication。"""
+    _quiet_qt_logs()
     app = QApplication.instance()
     if app is None:
         QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
         app = QApplication(argv if argv is not None else sys.argv)
+        # 统一使用 Fusion 风格，保证 QSS 主题色（含文字颜色）在各桌面环境下一致生效
+        app.setStyle("Fusion")
     app.setApplicationName(APP_NAME)
     app.setApplicationDisplayName(APP_NAME)
     app.setApplicationVersion(__version__)
