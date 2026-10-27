@@ -120,6 +120,56 @@ def save_cache(path: Path, raw: Any) -> None:
     temp.replace(path)
 
 
+def fetch_version_json(
+    client: httpx.Client,
+    entry: VersionEntry,
+    cache_dir: Path,
+    *,
+    force: bool = False,
+) -> dict[str, Any]:
+    """获取单个版本的 JSON 文档，按清单 sha1 校验本地缓存。"""
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    path = cache_dir / f"{entry.id}.json"
+    if not force and path.is_file():
+        try:
+            if not entry.sha1 or http.file_matches(path, entry.sha1, None):
+                cached = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(cached, dict):
+                    return cached
+        except (OSError, ValueError):
+            pass
+    raw = http.get_bytes(client, entry.url)
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError) as error:
+        raise NetworkError("版本文档格式异常。", detail=entry.id) from error
+    if not isinstance(data, dict):
+        raise NetworkError("版本文档格式异常。", detail=entry.id)
+    temporary = path.with_suffix(".tmp")
+    temporary.write_bytes(raw)
+    temporary.replace(path)
+    return data
+
+
+def java_major_for(entry: VersionEntry, document: dict[str, Any]) -> int | None:
+    """从版本文档读取 Java 主版本，缺失时按发布日期推断。"""
+    java = document.get("javaVersion") or {}
+    try:
+        major = int(java.get("majorVersion"))
+    except (TypeError, ValueError):
+        major = 0
+    if major:
+        return major
+    released = entry.release_time[:10]
+    if released >= "2024-04":
+        return 21
+    if released >= "2021-11":
+        return 17
+    if released >= "2021-06":
+        return 16
+    return 8
+
+
 def fetch_manifest(
     client: httpx.Client,
     cache_path: Path | None = None,

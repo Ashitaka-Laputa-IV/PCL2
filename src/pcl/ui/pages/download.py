@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from pcl.core.errors import friendly_message
+from pcl.launch import java as javamod
 from pcl.services import AppContext
 from pcl.ui.dialogs.import_modpack import ImportModpackDialog
 from pcl.ui.pages.base import BasePage
@@ -26,7 +27,7 @@ from pcl.ui.widgets.card import Card
 from pcl.ui.widgets.progress import GradientProgressBar
 from pcl.ui.widgets.toast import show_toast
 from pcl.version import loaders, meta
-from pcl.version.manifest import VersionEntry, fetch_manifest
+from pcl.version.manifest import VersionEntry, fetch_manifest, fetch_version_json, java_major_for
 
 KIND_FILTERS = (("release", "正式版"), ("snapshot", "快照"), ("old", "远古版本"), ("all", "全部"))
 LOADER_CHOICES = (
@@ -84,6 +85,10 @@ class DownloadPage(BasePage):
         self._entries: dict[str, VersionEntry] = {}
         self._loader_versions: list = []
         self._busy = False
+        self._detail_token = ""
+        self._detail_doc: dict | None = None
+        self._detail_entry: VersionEntry | None = None
+        self._java_required: int | None = None
         self._build()
         self.bridge.download_progress.connect(self._on_progress)
 
@@ -157,6 +162,21 @@ class DownloadPage(BasePage):
         self._detail_info.setObjectName("Muted")
         self._detail_info.setWordWrap(True)
         detail.add(self._detail_info)
+
+        self._detail_java = QLabel("", detail)
+        self._detail_java.setObjectName("Muted")
+        self._detail_java.setWordWrap(True)
+        detail.addWidget(self._detail_java)
+        self._java_row = QWidget(detail)
+        java_layout = QHBoxLayout(self._java_row)
+        java_layout.setContentsMargins(0, 0, 0, 0)
+        java_layout.setSpacing(8)
+        self._java_button = AnimatedButton("安装 Java", self._java_row, variant="secondary", height=30)
+        self._java_button.clicked.connect(self._open_java_install)
+        java_layout.addWidget(self._java_button)
+        java_layout.addStretch(1)
+        self._java_row.setVisible(False)
+        detail.addWidget(self._java_row)
         detail.addStretch(1)
 
         self._create_instance_check = QCheckBox("安装完成后自动创建实例", detail)
@@ -319,6 +339,8 @@ class DownloadPage(BasePage):
         if keyword:
             entries = [entry for entry in entries if keyword in entry.id.lower()]
 
+        previous = self._version_list.currentItem()
+        previous_id = str(previous.data(Qt.ItemDataRole.UserRole) or "") if previous is not None else ""
         self._version_list.clear()
         for entry in entries[:400]:
             item = QListWidgetItem()
@@ -336,7 +358,14 @@ class DownloadPage(BasePage):
                 ),
             )
         if entries:
-            self._version_list.setCurrentRow(0)
+            restore = 0
+            if previous_id:
+                for row in range(self._version_list.count()):
+                    item = self._version_list.item(row)
+                    if str(item.data(Qt.ItemDataRole.UserRole) or "") == previous_id:
+                        restore = row
+                        break
+            self._version_list.setCurrentRow(restore)
 
     def _fill_loader_mc(self) -> None:
         if self._manifest is None:
@@ -353,6 +382,11 @@ class DownloadPage(BasePage):
     def _on_version_selected(self, current: QListWidgetItem | None, _previous=None) -> None:
         if current is None:
             self._install_button.setEnabled(False)
+            self._detail_token = ""
+            self._detail_doc = None
+            self._java_required = None
+            self._detail_java.setText("")
+            self._java_row.setVisible(False)
             return
         version_id = str(current.data(Qt.ItemDataRole.UserRole))
         entry = self._entries.get(version_id)
@@ -371,6 +405,71 @@ class DownloadPage(BasePage):
         self._detail_hint.setText("该版本已安装，可重复安装以修复文件。" if installed else "")
         self._install_button.setText("重新安装" if installed else "安装该版本")
         self._install_button.setEnabled(True)
+
+        self._detail_token = version_id
+        self._detail_doc = None
+        self._detail_entry = entry
+        self._java_required = None
+        self._java_row.setVisible(False)
+        if entry is not None:
+            self._detail_java.setText("正在读取版本信息…")
+            self.tasks.submit(
+                fetch_version_json,
+                self.context.client(),
+                entry,
+                self.context.paths.cache / "version_json",
+                on_done=lambda document, target=version_id: self._apply_version_doc(target, document),
+                on_error=lambda _message, target=version_id: self._detail_failed(target),
+            )
+
+    def _detail_failed(self, version_id: str) -> None:
+        if version_id != self._detail_token:
+            return
+        self._detail_java.setText("未能读取该版本的 Java 需求信息。")
+        self._java_row.setVisible(False)
+
+    def _apply_version_doc(self, version_id: str, document: dict) -> None:
+        if version_id != self._detail_token or not isinstance(document, dict):
+            return
+        entry = self._detail_entry
+        if entry is None:
+            return
+        self._detail_doc = document
+        required = java_major_for(entry, document)
+        self._java_required = required
+        runtime = javamod.select_java(self.context.java_runtimes, required_major=required)
+        libraries = len(document.get("libraries") or [])
+        assets = str(document.get("assets") or (document.get("assetIndex") or {}).get("id") or "")
+        if runtime is not None:
+            java_text = f"需要 Java {required}　·　本机已就绪（{runtime.version}）"
+        else:
+            java_text = f"需要 Java {required}　·　本机未检测到匹配版本"
+        java_text += f"\n依赖库 {libraries} 个" + (f" · 资源索引 {assets}" if assets else "")
+        self._detail_java.setText(java_text)
+        self._set_java_state(ok=runtime is not None)
+        self._java_row.setVisible(runtime is None)
+
+    def _set_java_state(self, *, ok: bool) -> None:
+        name = "Muted" if ok else "Warning"
+        if self._detail_java.objectName() == name:
+            return
+        self._detail_java.setObjectName(name)
+        self._detail_java.style().unpolish(self._detail_java)
+        self._detail_java.style().polish(self._detail_java)
+
+    def _open_java_install(self) -> None:
+        from pcl.ui.dialogs.java_install import JavaInstallDialog
+
+        dialog = JavaInstallDialog(
+            self.context,
+            self.tasks,
+            self.bridge,
+            self,
+            recommended=self._java_required,
+        )
+        dialog.exec()
+        if self._detail_doc is not None and self._detail_token:
+            self._apply_version_doc(self._detail_token, self._detail_doc)
 
     # ---------- 安装 ----------
     def _install_selected_version(self) -> None:

@@ -57,6 +57,9 @@ class UiOptions:
     corner_radius: int = 8
     font_scale: float = 1.0
     sidebar_collapsed: bool = False
+    window_width: int = 1120
+    window_height: int = 720
+    window_maximized: bool = False
 
 
 @dataclass

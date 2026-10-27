@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+from pathlib import Path
+
 from pcl.version import meta
-from pcl.version.manifest import VersionManifest, parse_manifest
+from pcl.version.manifest import VersionEntry, VersionManifest, fetch_version_json, java_major_for, parse_manifest
 
 
 def test_rules_os_and_default() -> None:
@@ -97,3 +101,47 @@ def test_required_java_major() -> None:
     assert meta.required_java_major({}) == 8
     assert meta.required_java_major({}, default=16) == 16
     assert meta.version_type_label("snapshot") == "快照"
+
+
+class _RawResponse:
+    def __init__(self, raw: bytes) -> None:
+        self.content = raw
+        self.status_code = 200
+
+
+class _RawClient:
+    def __init__(self, raw: bytes) -> None:
+        self.raw = raw
+        self.calls = 0
+
+    def get(self, url: str):
+        self.calls += 1
+        return _RawResponse(self.raw)
+
+
+def test_fetch_version_json_cache(tmp_path) -> None:
+    raw = json.dumps({"id": "1.20.1", "javaVersion": {"majorVersion": 17}}).encode()
+    entry = VersionEntry(
+        id="1.20.1",
+        type="release",
+        url="https://x/1.20.1.json",
+        sha1=hashlib.sha1(raw).hexdigest(),
+        release_time="2023-06-12T00:00:00+00:00",
+    )
+    client = _RawClient(raw)
+    first = fetch_version_json(client, entry, tmp_path)
+    assert first["id"] == "1.20.1"
+    assert client.calls == 1
+    second = fetch_version_json(client, entry, tmp_path)
+    assert second["id"] == "1.20.1"
+    assert client.calls == 1
+
+
+def test_java_major_for_fallback() -> None:
+    modern = VersionEntry(id="1.21", type="release", url="u", release_time="2024-06-13T00:00:00+00:00")
+    assert java_major_for(modern, {}) == 21
+    classic = VersionEntry(id="1.20.1", type="release", url="u", release_time="2023-06-12T00:00:00+00:00")
+    assert java_major_for(classic, {}) == 17
+    legacy = VersionEntry(id="1.12.2", type="release", url="u", release_time="2017-09-18T00:00:00+00:00")
+    assert java_major_for(legacy, {}) == 8
+    assert java_major_for(legacy, {"javaVersion": {"majorVersion": 17}}) == 17

@@ -130,7 +130,13 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("PCL2 · Plain Craft Launcher (Python)")
         self.setMinimumSize(940, 660)
-        self.resize(1120, 720)
+        ui_config = context.config.ui
+        self.resize(
+            max(940, int(ui_config.window_width or 1120)),
+            max(660, int(ui_config.window_height or 720)),
+        )
+        if ui_config.window_maximized:
+            self.setWindowState(Qt.WindowState.WindowMaximized)
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
 
@@ -362,6 +368,16 @@ class MainWindow(QMainWindow):
 
     # ---------- 关闭 ----------
     def closeEvent(self, event) -> None:  # noqa: N802
+        try:
+            ui_config = self.context.config.ui
+            maximized = bool(self.windowState() & Qt.WindowState.WindowMaximized)
+            ui_config.window_maximized = maximized
+            if not maximized:
+                ui_config.window_width = self.width()
+                ui_config.window_height = self.height()
+            self.context.save_config()
+        except Exception as error:
+            log.warning("保存窗口状态失败：%s", error)
         try:
             self.context.stop_game()
             self.bridge.detach()

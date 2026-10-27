@@ -358,6 +358,7 @@ class ContentPage(BasePage):
 
     def _on_tab_changed(self, _index: int) -> None:
         self._selected.clear()
+        self._update_button.setVisible(self._current_kind() == "mods")
         self.refresh()
 
     # ---------- 批量选择 ----------

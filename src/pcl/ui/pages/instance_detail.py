@@ -111,10 +111,13 @@ class InstanceDetailPage(BasePage):
         titles.addWidget(self._tags)
         header.addLayout(titles, 1)
 
+        self._folder_button = AnimatedButton("打开目录", self._cover, variant="secondary", icon_name="folder", height=34)
+        self._folder_button.clicked.connect(self._open_game_dir)
         self._crash_button = AnimatedButton("崩溃分析", self._cover, variant="secondary", height=34)
         self._crash_button.clicked.connect(self._analyze_crash)
         self._launch_button = AnimatedButton("启动", self._cover, variant="white", icon_name="play", height=38)
         self._launch_button.clicked.connect(self._launch)
+        header.addWidget(self._folder_button)
         header.addWidget(self._crash_button)
         header.addWidget(self._launch_button)
         outer.addWidget(self._cover)
@@ -140,7 +143,14 @@ class InstanceDetailPage(BasePage):
     # ---------- 概览 ----------
     def _build_overview(self) -> QWidget:
         page = QWidget(self)
-        layout = QHBoxLayout(page)
+        outer = QVBoxLayout(page)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        scroll = QScrollArea(page)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        content = QWidget(scroll)
+        layout = QHBoxLayout(content)
         layout.setContentsMargins(0, 12, 0, 0)
         layout.setSpacing(14)
 
@@ -154,6 +164,7 @@ class InstanceDetailPage(BasePage):
         self._info_grid = QGridLayout()
         self._info_grid.setHorizontalSpacing(18)
         self._info_grid.setVerticalSpacing(8)
+        self._info_grid.setColumnStretch(1, 1)
         info_card.add_layout(self._info_grid)
         left.addWidget(info_card)
 
@@ -196,6 +207,8 @@ class InstanceDetailPage(BasePage):
         refresh_log.clicked.connect(self._load_log_preview)
         log_card.add(refresh_log, 0, Qt.AlignmentFlag.AlignRight)
         layout.addWidget(log_card, 2)
+        scroll.setWidget(content)
+        outer.addWidget(scroll, 1)
         return page
 
     # ---------- 设置 ----------
@@ -447,6 +460,7 @@ class InstanceDetailPage(BasePage):
             value_label = QLabel(str(value), self)
             value_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             value_label.setWordWrap(True)
+            value_label.setToolTip(str(value))
             self._info_grid.addWidget(label, index, 0)
             self._info_grid.addWidget(value_label, index, 1)
         self._load_log_preview()

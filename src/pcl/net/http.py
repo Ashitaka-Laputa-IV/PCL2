@@ -137,6 +137,26 @@ def get_json(
     raise NetworkError("获取网络数据失败。", detail=str(last_error)) from last_error
 
 
+def get_bytes(client: httpx.Client, url: str, *, retries: int = 3) -> bytes:
+    """获取原始字节（用于需要按 sha1 校验并原样落盘的缓存）。"""
+    last_error: Exception | None = None
+    for attempt in range(max(1, retries + 1)):
+        try:
+            response = client.get(url)
+            if response.status_code >= 400:
+                if response.status_code in (404, 410):
+                    raise NotFoundError(response.status_code, url)
+                raise HttpStatusError(response.status_code, url)
+            return response.content
+        except NotFoundError:
+            raise
+        except (httpx.HTTPError, NetworkError) as error:
+            last_error = error
+            if attempt:
+                time.sleep(min(0.4 * 2**attempt, 3.0))
+    raise NetworkError("获取网络数据失败。", detail=str(last_error)) from last_error
+
+
 def get_text(client: httpx.Client, url: str, *, retries: int = 3) -> str:
     """获取文本内容（用于校验文件、简单页面）。"""
     last_error: Exception | None = None
