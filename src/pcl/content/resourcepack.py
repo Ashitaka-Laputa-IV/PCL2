@@ -80,7 +80,9 @@ def is_shader_pack(path: Path) -> bool:
 def parse_pack(path: Path, kind: str = "resourcepack") -> PackInfo:
     """解析资源包或光影包。"""
     enabled = not path.name.endswith(DISABLED_SUFFIX)
-    info = PackInfo(path=path, kind=kind, enabled=enabled, name=Path(info_stem(path)).name)
+    stem = Path(info_stem(path))
+    display = stem.stem if path.is_file() else stem.name
+    info = PackInfo(path=path, kind=kind, enabled=enabled, name=display)
     try:
         info.size = path.stat().st_size if path.is_file() else 0
     except OSError:

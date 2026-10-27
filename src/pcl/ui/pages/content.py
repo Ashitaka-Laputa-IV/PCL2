@@ -6,8 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPixmap
+from PySide6.QtCore import QRectF, Qt
+from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -34,22 +34,54 @@ KIND_TABS = (("mods", "Mod"), ("resourcepacks", "资源包"), ("shaderpacks", "�
 
 
 def _letter_icon(text: str, size: int = 36) -> QPixmap:
-    pixmap = QPixmap(QSize(size, size) * 2)
-    pixmap.setDevicePixelRatio(2.0)
+    dpr = 2
+    pixmap = QPixmap(size * dpr, size * dpr)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    rect = QRectF(0, 0, size * dpr, size * dpr)
     path = QPainterPath()
-    path.addRoundedRect(pixmap.rect(), 10, 10)
+    path.addRoundedRect(rect.adjusted(0, 0, -1, -1), 8 * dpr, 8 * dpr)
     painter.fillPath(path, QColor("#E8EEF8"))
     painter.setPen(QColor("#5F6B7A"))
     font = QFont()
     font.setWeight(QFont.Weight.DemiBold)
-    font.setPixelSize(int(size * 0.62))
+    font.setPixelSize(int(size * dpr * 0.52))
     painter.setFont(font)
-    painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, (text or "?")[:1].upper())
+    painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, (text or "?")[:1].upper())
     painter.end()
+    pixmap.setDevicePixelRatio(dpr)
     return pixmap
+
+
+class DropZone(QWidget):
+    """空状态拖放区：虚线边框 + 说明文字。"""
+
+    def __init__(self, text: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setMinimumHeight(180)
+        self._text = text
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        accent = self.palette().highlight().color()
+        rect = QRectF(self.rect()).adjusted(1.5, 1.5, -1.5, -1.5)
+        fill = QColor(accent)
+        fill.setAlpha(10)
+        painter.setBrush(fill)
+        pen = QPen(accent)
+        pen.setWidthF(1.4)
+        pen.setStyle(Qt.PenStyle.DashLine)
+        painter.setPen(pen)
+        painter.drawRoundedRect(rect, 12, 12)
+
+        painter.setPen(QColor(accent))
+        font = QFont(self.font())
+        font.setPixelSize(13)
+        painter.setFont(font)
+        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self._text)
+        painter.end()
 
 
 class ContentRow(Card):
@@ -244,11 +276,8 @@ class ContentPage(BasePage):
         self._hint.setText(f"目录：{manager.directory(kind)}")
 
     def _show_empty(self, layout: QVBoxLayout, text: str) -> None:
-        label = QLabel(text, self)
-        label.setObjectName("Muted")
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label.setMinimumHeight(160)
-        layout.insertWidget(layout.count() - 1, label)
+        zone = DropZone(f"{text}\n\n把文件拖到这里即可安装", self)
+        layout.insertWidget(layout.count() - 1, zone)
 
     def _update_banner(self, report) -> None:
         if report.ok:

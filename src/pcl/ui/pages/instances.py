@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -32,24 +32,24 @@ from pcl.ui.widgets.toast import show_toast
 
 
 def _initial_pixmap(text: str, color: QColor, size: int = 48) -> QPixmap:
-    """生成带首字母的圆角图标。"""
-    pixmap = QPixmap(QSize(size, size) * 2)
-    pixmap.setDevicePixelRatio(2.0)
+    """生成带首字母的圆角图标（按设备像素绘制，保证高分屏清晰）。"""
+    dpr = 2
+    pixmap = QPixmap(size * dpr, size * dpr)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-    rect = pixmap.rect().adjusted(0, 0, -1, -1)
+    rect = QRectF(0, 0, size * dpr, size * dpr)
     path = QPainterPath()
-    path.addRoundedRect(rect, 14, 14)
-    gradient = QColor(color)
-    painter.fillPath(path, gradient)
+    path.addRoundedRect(rect.adjusted(0, 0, -1, -1), 12 * dpr, 12 * dpr)
+    painter.fillPath(path, QColor(color))
     painter.setPen(QColor("#FFFFFF"))
     font = QFont()
     font.setWeight(QFont.Weight.Bold)
-    font.setPixelSize(int(size * 0.9))
+    font.setPixelSize(int(size * dpr * 0.56))
     painter.setFont(font)
-    painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, (text or "?").strip()[:1].upper())
+    painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, (text or "?").strip()[:1].upper())
     painter.end()
+    pixmap.setDevicePixelRatio(dpr)
     return pixmap
 
 

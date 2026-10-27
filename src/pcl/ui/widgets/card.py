@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QFrame, QGraphicsDropShadowEffect, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QFrame,
+    QGraphicsDropShadowEffect,
+    QLabel,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
 
 class Card(QFrame):
@@ -42,10 +49,17 @@ class Card(QFrame):
         return self._layout
 
     def add(self, widget: QWidget, stretch: int = 0, alignment=None) -> None:
+        self._fix_label_policy(widget)
         if alignment is None:
             self._layout.addWidget(widget, stretch)
         else:
             self._layout.addWidget(widget, stretch, alignment)
+
+    @staticmethod
+    def _fix_label_policy(widget: QWidget) -> None:
+        """文字标签不参与纵向拉伸，避免标题被撑到卡片中部。"""
+        if isinstance(widget, QLabel):
+            widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
 
     def add_layout(self, layout, stretch: int = 0) -> None:
         self._layout.addLayout(layout, stretch)

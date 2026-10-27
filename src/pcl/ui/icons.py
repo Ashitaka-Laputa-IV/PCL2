@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QSize, Qt
+from PySide6.QtCore import QByteArray, QRectF, QSize, Qt
 from PySide6.QtGui import QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
@@ -32,7 +32,8 @@ def pixmap(name: str, color: str = "#5F6B7A", size: int = 22) -> QPixmap:
     result.fill(Qt.GlobalColor.transparent)
     painter = QPainter(result)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-    renderer.render(painter)
+    # 显式给出逻辑尺寸目标矩形，避免高分屏下按设备像素放大导致裁切
+    renderer.render(painter, QRectF(0.0, 0.0, float(size), float(size)))
     painter.end()
     _cache[key] = result
     return result

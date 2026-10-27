@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -79,14 +80,17 @@ class Account:
         )
 
 
+_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")
+
+
 def validate_name(name: str) -> str:
-    """校验离线用户名（仅允许字母数字与下划线，长度 1-16）。"""
+    """校验离线用户名（仅允许 ASCII 字母数字与下划线，长度 1-16）。"""
     cleaned = (name or "").strip()
     if not cleaned:
         raise ConfigError("用户名不能为空。")
     if len(cleaned) > 16:
         raise ConfigError("用户名最长 16 个字符。")
-    if not all(ch.isalnum() or ch == "_" for ch in cleaned):
+    if not _NAME_PATTERN.match(cleaned):
         raise ConfigError("用户名只能包含字母、数字和下划线。")
     return cleaned
 

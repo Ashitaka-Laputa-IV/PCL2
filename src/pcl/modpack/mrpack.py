@@ -59,20 +59,23 @@ def parse(path: Path) -> ParsedModpack:
         env = item.get("env")
         if isinstance(env, Mapping) and str(env.get("client", "required")) == "unsupported":
             continue
+        relative = str(item.get("path", "") or "")
+        if not relative:
+            continue
         downloads = item.get("downloads") or []
         url = str(downloads[0]) if downloads else ""
-        relative = str(item.get("path", "") or "")
-        if not url or not relative:
-            warnings.append(f"文件条目缺少下载地址：{relative or '未知'}")
-            continue
         hashes = item.get("hashes")
         sha1 = str(hashes.get("sha1", "")) if isinstance(hashes, Mapping) else ""
+        if not url:
+            # 允许「无下载地址」的条目（本启动器导出的包会把文件放进 overrides）
+            warnings.append(f"文件条目缺少下载地址：{relative}，将使用包内文件")
         files.append(
             PackFile(
                 url=url,
                 path=relative,
                 sha1=sha1 or None,
                 size=int(item.get("fileSize") or 0) or None,
+                optional=not url,
             )
         )
 

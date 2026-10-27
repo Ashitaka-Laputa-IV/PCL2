@@ -137,15 +137,31 @@ def apply_theme(
     app.setFont(font)
 
     palette = app.palette()
-    if theme == "dark":
-        palette.setColor(QPalette.ColorRole.Window, QColor(tokens["bg"]))
-        palette.setColor(QPalette.ColorRole.WindowText, QColor(tokens["text"]))
-        palette.setColor(QPalette.ColorRole.Base, QColor(tokens["surface"]))
-        palette.setColor(QPalette.ColorRole.Text, QColor(tokens["text"]))
-    else:
-        palette.setColor(QPalette.ColorRole.Window, QColor(tokens["bg"]))
-        palette.setColor(QPalette.ColorRole.WindowText, QColor(tokens["text"]))
-        palette.setColor(QPalette.ColorRole.Base, QColor(tokens["surface"]))
-        palette.setColor(QPalette.ColorRole.Text, QColor(tokens["text"]))
+    palette.setColor(QPalette.ColorRole.Window, QColor(tokens["bg"]))
+    palette.setColor(QPalette.ColorRole.WindowText, QColor(tokens["text"]))
+    palette.setColor(QPalette.ColorRole.Base, QColor(tokens["surface"]))
+    palette.setColor(QPalette.ColorRole.AlternateBase, QColor(tokens["surface_alt"]))
+    palette.setColor(QPalette.ColorRole.Text, QColor(tokens["text"]))
+    palette.setColor(QPalette.ColorRole.Button, QColor(tokens["surface_alt"]))
+    palette.setColor(QPalette.ColorRole.ButtonText, QColor(tokens["text"]))
+    palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(tokens["surface"]))
+    palette.setColor(QPalette.ColorRole.ToolTipText, QColor(tokens["text"]))
+    # 自绘控件统一从 Highlight 读取强调色。
+    # 必须覆盖 Active / Inactive / Disabled 三组，否则窗口失焦时 Qt 会退回
+    # 系统样式的浅色高亮，导致强调色忽明忽暗。
+    for group in (
+        QPalette.ColorGroup.Active,
+        QPalette.ColorGroup.Inactive,
+        QPalette.ColorGroup.Disabled,
+    ):
+        palette.setColor(group, QPalette.ColorRole.Highlight, QColor(accent))
+        palette.setColor(group, QPalette.ColorRole.HighlightedText, QColor("#FFFFFF"))
+        palette.setColor(group, QPalette.ColorRole.Link, QColor(accent))
+        palette.setColor(group, QPalette.ColorRole.Window, QColor(tokens["bg"]))
+        palette.setColor(group, QPalette.ColorRole.WindowText, QColor(tokens["text"]))
+        palette.setColor(group, QPalette.ColorRole.Base, QColor(tokens["surface"]))
+        palette.setColor(group, QPalette.ColorRole.Text, QColor(tokens["text"]))
+        palette.setColor(group, QPalette.ColorRole.Button, QColor(tokens["surface_alt"]))
+        palette.setColor(group, QPalette.ColorRole.ButtonText, QColor(tokens["text"]))
     app.setPalette(palette)
     return tokens

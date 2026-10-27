@@ -100,6 +100,25 @@ class SettingsPage(BasePage):
         self._status.setObjectName("Muted")
         outer.addWidget(self._status)
 
+        # 统一控件宽度，保持右侧控件纵向对齐
+        for widget, width in (
+            (self._memory, 130),
+            (self._width, 108),
+            (self._height, 108),
+            (self._radius, 108),
+            (self._concurrency, 108),
+            (self._speed, 140),
+            (self._retry, 108),
+            (self._log_lines, 140),
+        ):
+            widget.setFixedWidth(width)
+        self._java_combo.setFixedWidth(300)
+        self._jvm_args.setFixedWidth(360)
+        self._game_args.setFixedWidth(360)
+        self._mirror.setFixedWidth(360)
+        self._curseforge.setFixedWidth(360)
+        self._game_root.setFixedWidth(280)
+
     def _row(self, title: str, description: str, control: QWidget) -> QWidget:
         container = QWidget(self)
         row = QHBoxLayout(container)

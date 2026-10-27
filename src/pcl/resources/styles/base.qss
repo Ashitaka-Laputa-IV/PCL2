@@ -3,8 +3,10 @@
 QWidget {
     color: %TEXT%;
     font-size: %FONT_SIZE%;
-    selection-background-color: %ACCENT_SOFT%;
-    selection-color: %TEXT%;
+    /* 必须使用不透明颜色：带 alpha 的 selection-background-color 会让 Qt
+       把 palette.Highlight 一起改成半透明，导致所有自绘控件变淡 */
+    selection-background-color: %ACCENT%;
+    selection-color: #FFFFFF;
 }
 
 QMainWindow,
@@ -205,6 +207,34 @@ QComboBox QAbstractItemView::item:hover,
 QComboBox QAbstractItemView::item:selected {
     background: %ACCENT_SOFT%;
     color: %ACCENT%;
+}
+
+/* 数字框：隐藏默认的上下按钮，避免不同平台渲染成方块；仍可滚轮/键盘调整 */
+QSpinBox {
+    padding-right: 10px;
+}
+
+QSpinBox::up-button,
+QSpinBox::down-button {
+    width: 0;
+    height: 0;
+    border: none;
+    background: transparent;
+}
+
+QSpinBox::up-arrow,
+QSpinBox::down-arrow {
+    width: 0;
+    height: 0;
+    image: none;
+}
+
+/* 滚动区域默认带灰色 viewport，需要显式透明 */
+QScrollArea,
+QScrollArea > QWidget > QWidget,
+QAbstractScrollArea::viewport {
+    background: transparent;
+    border: none;
 }
 
 /* ---------- 列表 ---------- */

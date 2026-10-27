@@ -112,6 +112,8 @@ def _install_game_files(
         return 0, []
     tasks: list[DownloadTask] = []
     for item in parsed.files:
+        if not item.url:
+            continue
         try:
             destination = safe_join(game_dir, item.path)
         except ModpackError as error:
@@ -213,12 +215,24 @@ def import_modpack(
     return result
 
 
+def export_modpack(
+    instance: Instance,
+    paths: AppPaths,
+    dest: Path,
+    kind: str = "hmcl",
+    **kwargs: object,
+):
+    """把实例导出为指定格式（便捷入口）。"""
+    return exporter.export(instance, paths, dest, kind, **kwargs)
+
+
 __all__ = [
     "FORMATS",
     "FORMAT_LABELS",
     "ImportResult",
     "ParsedModpack",
     "detect_format",
+    "export_modpack",
     "exporter",
     "import_modpack",
     "parse_modpack",

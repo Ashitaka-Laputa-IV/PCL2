@@ -87,9 +87,10 @@ def evaluate_rules(
     os_arch: str | None = None,
     os_version: str | None = None,
 ) -> bool:
-    """按官方语义判断带 ``rules`` 的条目是否适用于当前环境。
+    """判断带 ``rules`` 的条目是否适用于当前环境。
 
-    无 ``rules`` 视为始终适用；有 ``rules`` 时默认不允许，命中规则按 allow/disallow 覆盖。
+    语义与 HMCL / 官方启动器一致：无 ``rules`` 视为始终适用；有 ``rules`` 时
+    依次匹配，**第一条命中的规则**决定 allow / disallow，全部不命中则不允许。
     """
     if rules is None:
         return True
@@ -102,15 +103,12 @@ def evaluate_rules(
     os_arch = os_arch or current_arch()
     os_version = os_version or current_os_version()
 
-    allowed = False
-    matched = False
     for rule in rules:
         if not isinstance(rule, Mapping):
             continue
         if _rule_matches(rule, features, os_name, os_arch, os_version):
-            matched = True
-            allowed = rule.get("action", "allow") == "allow"
-    return allowed if matched else False
+            return rule.get("action", "allow") == "allow"
+    return False
 
 
 def library_allowed(library: Mapping[str, Any], features: Mapping[str, bool] | None = None) -> bool:

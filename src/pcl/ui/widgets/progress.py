@@ -83,7 +83,13 @@ class RingProgress(QWidget):
         self._value = 0.0
         self._diameter = diameter
         self._thickness = thickness
+        self._track: QColor | None = None
         self.setFixedSize(diameter, diameter)
+
+    def set_track_color(self, color: QColor) -> None:
+        """自定义轨道颜色（用于深色背景上）。"""
+        self._track = QColor(color)
+        self.update()
 
     def set_value(self, value: float) -> None:
         self._value = max(0.0, min(100.0, float(value)))
@@ -95,7 +101,7 @@ class RingProgress(QWidget):
         margin = self._thickness / 2 + 2
         rect = QRectF(margin, margin, self.width() - margin * 2, self.height() - margin * 2)
 
-        track = QColor("#E4E9F2") if not self._is_dark() else QColor("#2B3342")
+        track = self._track or (QColor("#E4E9F2") if not self._is_dark() else QColor("#2B3342"))
         pen = QPen(track)
         pen.setWidthF(self._thickness)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)

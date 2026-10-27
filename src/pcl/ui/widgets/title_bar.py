@@ -37,7 +37,7 @@ class _WindowButton(QPushButton):
     def __init__(self, text: str, parent: QWidget | None = None, *, danger: bool = False) -> None:
         super().__init__(text, parent)
         self._danger = danger
-        self.setFixedSize(34, 28)
+        self.setFixedSize(38, 30)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFlat(True)
         self.setStyleSheet(
@@ -45,13 +45,18 @@ class _WindowButton(QPushButton):
             QPushButton {
                 background: transparent;
                 border: none;
-                border-radius: 6px;
+                border-radius: 7px;
                 color: %s;
-                font-size: 13px;
+                font-size: 15px;
+                font-weight: 500;
             }
-            QPushButton:hover { background: %s; }
+            QPushButton:hover { background: %s; color: %s; }
             """
-            % ("#5F6B7A", "rgba(239, 68, 68, 0.16)" if danger else "rgba(120, 140, 170, 0.18)")
+            % (
+                "#5F6B7A",
+                "rgba(239, 68, 68, 0.16)" if danger else "rgba(120, 140, 170, 0.18)",
+                "#EF4444" if danger else "#1F2329",
+            )
         )
 
 
