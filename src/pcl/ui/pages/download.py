@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -35,6 +35,26 @@ LOADER_CHOICES = (
     ("forge", "Forge"),
     ("neoforge", "NeoForge"),
 )
+
+
+class VersionRow(QWidget):
+    """版本列表富行：版本号 + 类型徽章 + 发布日期。"""
+
+    def __init__(self, version_id: str, type_label: str, date: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(10, 5, 12, 5)
+        row.setSpacing(8)
+        name = QLabel(version_id, self)
+        name.setStyleSheet("font-weight: 600; font-size: 13px;")
+        tag = QLabel(type_label, self)
+        tag.setObjectName("TagNeutral")
+        when = QLabel(date, self)
+        when.setObjectName("Muted")
+        row.addWidget(name)
+        row.addWidget(tag)
+        row.addStretch(1)
+        row.addWidget(when)
 
 
 class DownloadPage(BasePage):
@@ -273,10 +293,14 @@ class DownloadPage(BasePage):
 
         self._version_list.clear()
         for entry in entries[:400]:
-            label = f"{entry.id}   ·   {meta.version_type_label(entry.type)}   ·   {entry.release_date}"
-            item = QListWidgetItem(label)
+            item = QListWidgetItem()
             item.setData(Qt.ItemDataRole.UserRole, entry.id)
+            item.setSizeHint(QSize(0, 46))
             self._version_list.addItem(item)
+            self._version_list.setItemWidget(
+                item,
+                VersionRow(entry.id, meta.version_type_label(entry.type), entry.release_date, self._version_list),
+            )
         if entries:
             self._version_list.setCurrentRow(0)
 

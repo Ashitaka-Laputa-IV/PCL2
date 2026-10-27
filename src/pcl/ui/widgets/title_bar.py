@@ -15,20 +15,14 @@ class _Mark(QWidget):
         self.setFixedSize(size, size)
 
     def paintEvent(self, event) -> None:  # noqa: N802
+        from pcl.ui import icons
+
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        accent = self.palette().highlight().color()
-        rect = QRectF(0, 0, self.width(), self.height())
-        path = QPainterPath()
-        path.addRoundedRect(rect, self.width() * 0.3, self.width() * 0.3)
-        painter.fillPath(path, accent)
-
-        font = QFont(self.font())
-        font.setWeight(QFont.Weight.Black)
-        font.setPixelSize(int(self.height() * 0.56))
-        painter.setFont(font)
-        painter.setPen(QColor("#FFFFFF"))
-        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, "P")
+        pixmap = icons.pixmap("logo", "#2E7CF6", self.width())
+        if not pixmap.isNull():
+            painter.drawPixmap(0, 0, pixmap)
+        painter.end()
 
 
 class _WindowButton(QPushButton):

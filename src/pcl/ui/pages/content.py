@@ -23,6 +23,7 @@ from pcl.content.conflict import check_conflicts
 from pcl.content.manager import ContentManager
 from pcl.core.errors import friendly_message
 from pcl.services import AppContext
+from pcl.ui import icons
 from pcl.ui.dialogs.confirm import confirm
 from pcl.ui.pages.base import BasePage
 from pcl.ui.widgets.animated_button import AnimatedButton
@@ -77,11 +78,19 @@ class DropZone(QWidget):
         painter.setPen(pen)
         painter.drawRoundedRect(rect, 12, 12)
 
+        pixmap = icons.pixmap("inbox", accent.name(), 44)
+        if not pixmap.isNull():
+            painter.drawPixmap(
+                int(rect.center().x() - pixmap.width() / 2),
+                int(rect.top() + 26),
+                pixmap,
+            )
+
         painter.setPen(QColor(accent))
         font = QFont(self.font())
         font.setPixelSize(13)
         painter.setFont(font)
-        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self._text)
+        painter.drawText(rect.adjusted(0, 58, 0, 0), Qt.AlignmentFlag.AlignCenter, self._text)
         painter.end()
 
 
