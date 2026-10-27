@@ -14,7 +14,7 @@
 | 离线启动 | 仅离线登录（离线 UUID 与 Java 版 `UUID.nameUUIDFromBytes` 完全一致）、Java 自动扫描与按版本挑选、内存 / 窗口 / JVM / 游戏参数、`natives` 解压、实时日志与结束进程 |
 | 资源管理 | Mod（`fabric.mod.json` / `META-INF/mods.toml` / `mcmod.info`）、资源包（`pack.mcmeta`）、光影（`shaders/`）扫描；`.disabled` 启停 / 批量启停与删除；拖入安装；基于元数据的依赖缺失 / 重复 / 版本不匹配检查；Modrinth 指纹比对显示可更新版本并一键替换 |
 | 整合包 | Modrinth（`.mrpack`）、CurseForge（zip + `manifest.json`）、HMCL（`modpack.json`）、PCL（`PCL/Setup.ini`）导入；导出为 HMCL / PCL 包，Modrinth 导出为尽力而为模式 |
-| 下载引擎 | 并发线程池、按目标路径去重、镜像回退（BMCLAPI）、限速、取消、失败重试、按字节聚合的进度与速度 |
+| 下载引擎 | 并发线程池、按目标路径去重、镜像回退（BMCLAPI）、限速、取消、失败重试、按字节聚合的进度与速度；大文件（如整合包 `.mrpack`）自动 Range 多段并发，服务端不支持时回退单连接 |
 | 社区资源 | Modrinth 搜索与下载；选中整合包时下载 `.mrpack` 后自动导入并创建实例（无需先建实例） |
 | 实例详情 | 概览 / 设置 / 内容 / 存档 / 服务器 |
 | 崩溃分析 | 规则匹配 crash-report 与日志 |

@@ -415,6 +415,7 @@ class CommunityBrowser(QWidget):
                 destination,
                 sha1=file.sha1 or None,
                 size=file.size or None,
+                segments=6,
             )
             return import_modpack(
                 destination,

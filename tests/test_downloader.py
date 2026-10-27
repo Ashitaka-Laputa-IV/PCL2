@@ -8,9 +8,11 @@ import socketserver
 import threading
 from pathlib import Path
 
+import httpx
 import pytest
 
 from pcl.net.downloader import DownloadManager, DownloadTask, dedupe_tasks, total_size
+from pcl.net.http import download_file
 from pcl.net.mirror import candidates, mirror_url
 
 
@@ -127,3 +129,51 @@ def test_cancel_before_start(http_server, tmp_path) -> None:
     )
     assert summary.cancelled
     assert not (tmp_path / "never.bin").exists()
+
+
+def test_segmented_download(tmp_path) -> None:
+    payload = b"pcl2-segment-" * 400000
+    size = len(payload)
+    sha1 = hashlib.sha1(payload).hexdigest()
+
+    class RangeHandler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            return
+
+        def do_GET(self):
+            header = self.headers.get("Range")
+            if header:
+                start_text, end_text = header.replace("bytes=", "").split("-")
+                start = int(start_text)
+                end = int(end_text) if end_text else size - 1
+                body = payload[start : end + 1]
+                self.send_response(206)
+                self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+            else:
+                body = payload
+                self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), RangeHandler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        dest = tmp_path / "segmented.bin"
+        counted: list[int] = []
+        with httpx.Client() as client:
+            written = download_file(
+                client,
+                f"http://127.0.0.1:{server.server_address[1]}/big.bin",
+                dest,
+                sha1=sha1,
+                size=size,
+                segments=4,
+                progress=counted.append,
+            )
+        assert written == size
+        assert sum(counted) == size
+        assert dest.read_bytes() == payload
+    finally:
+        server.shutdown()
+        server.server_close()

@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
@@ -21,6 +22,8 @@ from pcl.core.logging import get_logger
 log = get_logger(__name__)
 
 CHUNK_SIZE = 256 * 1024
+SEGMENT_MIN_SIZE = 4 * 1024 * 1024
+MAX_SEGMENTS = 8
 DEFAULT_TIMEOUT = httpx.Timeout(connect=10.0, read=30.0, write=30.0, pool=10.0)
 ACCEPT_ENCODING = "identity"  # 保证 Range 请求的字节偏移可用
 
@@ -173,6 +176,96 @@ def get_text(client: httpx.Client, url: str, *, retries: int = 3) -> str:
     raise NetworkError("获取网络数据失败。", detail=str(last_error)) from last_error
 
 
+class _RangeUnsupported(Exception):
+    """服务端不支持分段下载，回退到单连接。"""
+
+
+def _probe_segments(client: httpx.Client, url: str) -> bool:
+    try:
+        with client.stream("GET", url, headers={"Range": "bytes=0-0"}) as response:
+            # 只读响应头，避免服务端忽略 Range 时把整个文件读进内存
+            return response.status_code == 206 and "bytes" in response.headers.get("content-range", "")
+    except httpx.HTTPError:
+        return False
+
+
+def _download_segmented(
+    client: httpx.Client,
+    url: str,
+    dest: Path,
+    *,
+    size: int,
+    sha1: str | None,
+    segments: int,
+    progress: Callable[[int], None] | None,
+    cancel: threading.Event | None,
+    limiter: SpeedLimiter | None,
+) -> int:
+    """把单个大文件拆成多段并发下载，最后合并并校验。"""
+    count = max(2, min(MAX_SEGMENTS, segments))
+    part = dest.with_name(dest.name + ".part")
+    seg_paths = [part.with_name(f"{part.name}.seg{index}") for index in range(count)]
+    chunk = size // count
+    bounds: list[tuple[int, int]] = []
+    for index in range(count):
+        start = index * chunk
+        end = size - 1 if index == count - 1 else start + chunk - 1
+        bounds.append((start, end))
+
+    if not _probe_segments(client, url):
+        raise _RangeUnsupported(url)
+
+    def fetch(index: int, start: int, end: int) -> None:
+        path = seg_paths[index]
+        expected = end - start + 1
+        try:
+            with client.stream("GET", url, headers={"Range": f"bytes={start}-{end}"}) as response:
+                if response.status_code != 206:
+                    raise _RangeUnsupported(url)
+                with path.open("wb") as stream:
+                    for piece in response.iter_bytes(CHUNK_SIZE):
+                        if cancel is not None and cancel.is_set():
+                            raise CancelledError()
+                        if not piece:
+                            continue
+                        stream.write(piece)
+                        if limiter is not None:
+                            limiter.consume(len(piece), cancel)
+                        if progress is not None:
+                            progress(len(piece))
+            if path.stat().st_size != expected:
+                raise NetworkError("分片大小不符，将重新下载。", detail=url)
+        except httpx.HTTPError as error:
+            raise NetworkError("分片下载中断，请重试。", detail=str(error)) from error
+
+    try:
+        with ThreadPoolExecutor(max_workers=count, thread_name_prefix="pcl-seg") as pool:
+            futures = [pool.submit(fetch, index, start, end) for index, (start, end) in enumerate(bounds)]
+            for future in futures:
+                future.result()
+
+        written = 0
+        with part.open("wb") as stream:
+            for path in seg_paths:
+                with path.open("rb") as source:
+                    while True:
+                        block = source.read(CHUNK_SIZE)
+                        if not block:
+                            break
+                        stream.write(block)
+                        written += len(block)
+        if written != size:
+            raise NetworkError("分段合并后大小不符，将重新下载。", detail=url)
+        if sha1 and sha1_file(part).lower() != sha1.lower():
+            raise ChecksumError("文件 sha1 校验失败，已丢弃。", path=str(dest))
+        dest.unlink(missing_ok=True)
+        part.replace(dest)
+        return written
+    finally:
+        for path in seg_paths:
+            path.unlink(missing_ok=True)
+
+
 def download_file(
     client: httpx.Client,
     url: str,
@@ -184,6 +277,7 @@ def download_file(
     progress: Callable[[int], None] | None = None,
     cancel: threading.Event | None = None,
     limiter: SpeedLimiter | None = None,
+    segments: int = 1,
 ) -> int:
     """下载单个文件到 ``dest``。
 
@@ -195,6 +289,22 @@ def download_file(
     if sha1 or size is not None:
         if file_matches(dest, sha1, size):
             return 0
+
+    if segments > 1 and size and size >= SEGMENT_MIN_SIZE:
+        try:
+            return _download_segmented(
+                client,
+                url,
+                dest,
+                size=size,
+                sha1=sha1,
+                segments=segments,
+                progress=progress,
+                cancel=cancel,
+                limiter=limiter,
+            )
+        except _RangeUnsupported:
+            pass
 
     dest.parent.mkdir(parents=True, exist_ok=True)
     part = dest.with_name(dest.name + ".part")
