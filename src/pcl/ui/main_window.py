@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QKeySequence, QPainter, QPainterPath, QShortcut
 from PySide6.QtWidgets import (
@@ -22,6 +24,7 @@ from pcl.core.logging import get_logger
 from pcl.services import AppContext
 from pcl.ui import icons, theme
 from pcl.ui.dialogs.crash_report import show_crash_report
+from pcl.ui.dialogs.import_modpack import ImportModpackDialog
 from pcl.ui.dialogs.log_viewer import LogWindow
 from pcl.ui.pages.base import BasePage
 from pcl.ui.pages.content import ContentPage
@@ -139,6 +142,7 @@ class MainWindow(QMainWindow):
             self.setWindowState(Qt.WindowState.WindowMaximized)
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
+        self.setAcceptDrops(True)
 
         root = QWidget(self)
         root.setObjectName("RootSurface")
@@ -365,6 +369,81 @@ class MainWindow(QMainWindow):
         if report is None or not report.reasons:
             return
         show_crash_report(self, report)
+
+    # ---------- 拖放安装 ----------
+    @staticmethod
+    def _local_files(mime) -> list[Path]:
+        if not mime.hasUrls():
+            return []
+        files: list[Path] = []
+        for url in mime.urls():
+            if not url.isLocalFile():
+                continue
+            path = Path(url.toLocalFile())
+            if path.is_file():
+                files.append(path)
+        return files
+
+    def dragEnterEvent(self, event) -> None:  # noqa: N802
+        if self._local_files(event.mimeData()):
+            event.acceptProposedAction()
+            return
+        super().dragEnterEvent(event)
+
+    def dropEvent(self, event) -> None:  # noqa: N802
+        files = self._local_files(event.mimeData())
+        if not files:
+            super().dropEvent(event)
+            return
+        event.acceptProposedAction()
+        self._install_dropped(files)
+
+    def _install_dropped(self, files: list[Path]) -> None:
+        from pcl.content.manager import ContentManager
+        from pcl.modpack import detect_format
+
+        packs: list[Path] = []
+        others: list[Path] = []
+        for file in files:
+            if file.suffix.lower() in (".mrpack", ".zip"):
+                try:
+                    detect_format(file)
+                except Exception:  # noqa: BLE001 - 不是整合包则按普通内容处理
+                    pass
+                else:
+                    packs.append(file)
+                    continue
+            others.append(file)
+
+        if len(packs) > 1:
+            show_toast(self, "一次只能导入一个整合包，已处理第一个文件", "warning")
+
+        if packs:
+            dialog = ImportModpackDialog(self.context, self.tasks, self.bridge, self, initial_path=packs[0])
+            if dialog.exec() == dialog.DialogCode.Accepted:
+                show_toast(self, "整合包导入完成", "success")
+                self._refresh_pages(("instances", "home"))
+
+        if others:
+            instance = self.context.current_instance()
+            if instance is None:
+                show_toast(self, "请先在版本管理中选择一个实例，再拖入 Mod / 资源包", "warning")
+                return
+            try:
+                installed = ContentManager(self.context.paths, instance).import_dropped(others)
+            except Exception as error:  # noqa: BLE001
+                show_toast(self, friendly_message(error), "error")
+                return
+            if installed:
+                show_toast(self, f"已安装 {len(installed)} 个文件到 {instance.name}", "success")
+                self._refresh_pages(("content", "home"))
+
+    def _refresh_pages(self, names: tuple[str, ...]) -> None:
+        for name in names:
+            page = self.pages.get(name)
+            refresh = getattr(page, "refresh", None)
+            if callable(refresh):
+                refresh()
 
     # ---------- 关闭 ----------
     def closeEvent(self, event) -> None:  # noqa: N802

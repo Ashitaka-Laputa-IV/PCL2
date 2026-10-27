@@ -185,12 +185,12 @@ class InstancesPage(BasePage):
         self._search.textChanged.connect(self._on_search)
         header.addWidget(self._search)
 
-        new_button = AnimatedButton("新建实例", self, variant="primary")
+        new_button = AnimatedButton("新建实例", self, variant="secondary")
         new_button.clicked.connect(self.create_instance)
-        import_button = AnimatedButton("导入整合包", self, variant="secondary")
-        import_button.clicked.connect(self.import_modpack)
-        header.addWidget(import_button)
+        install_button = AnimatedButton("安装新版本", self, variant="primary", icon_name="download")
+        install_button.clicked.connect(lambda: self.window().navigate("download") if hasattr(self.window(), "navigate") else None)
         header.addWidget(new_button)
+        header.addWidget(install_button)
         outer.addLayout(header)
 
         self._summary = QLabel("", self)
@@ -266,6 +266,17 @@ class InstancesPage(BasePage):
             show_toast(self, "无法打开实例详情", "error")
 
     def launch_instance(self, instance: Instance) -> None:
+        if not self.context.version_installed(instance.version_id):
+            if confirm(
+                self,
+                "版本文件缺失",
+                f"「{instance.name}」对应的版本 {instance.version_id} 尚未安装，是否前往下载页安装？",
+                ok_text="前往下载",
+            ):
+                navigate = getattr(self.window(), "navigate", None)
+                if callable(navigate):
+                    navigate("download")
+            return
         try:
             self.context.select_instance(instance.id)
         except Exception as error:

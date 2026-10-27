@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from pcl.core.errors import friendly_message
 from pcl.services import AppContext
+from pcl.ui.dialogs.confirm import confirm
 from pcl.ui import icons
 from pcl.ui.pages.base import BasePage
 from pcl.ui.widgets.animated_button import AnimatedButton
@@ -467,6 +468,15 @@ class HomePage(BasePage):
         if instance is None:
             show_toast(self, "请先新建一个实例", "warning")
             self._navigate("instances")
+            return
+        if not self.context.version_installed(instance.version_id):
+            if confirm(
+                self,
+                "版本文件缺失",
+                f"「{instance.name}」对应的版本 {instance.version_id} 尚未安装，是否前往下载页安装？",
+                ok_text="前往下载",
+            ):
+                self._navigate("download")
             return
 
         self._launching = True

@@ -9,9 +9,9 @@
 | 模块 | 已实现能力 |
 | --- | --- |
 | 版本下载安装 | 官方版本清单（正式版 / 快照 / 远古版）、客户端 jar、依赖库、资源索引与资源对象；`sha1` + `size` 双校验、断点续传、原子落盘；支持 Forge / NeoForge / Fabric / Quilt 合成可启动版本 |
-| 实例管理 | 新建 / 复制 / 重命名 / 删除实例、版本隔离目录、导入已有 `.minecraft`、导出整合包；`versions/` 下已安装版本会自动登记为实例（友好名称 + 加载器信息，删除后不再自动出现）；新建实例可从已安装版本下拉选择（加载器与启动版本自动识别），也可直接选择 `modpacks/`、下载目录中的 `.mrpack` / 整合包 zip 导入 |
+| 实例管理 | 新建 / 复制 / 重命名 / 删除实例、版本隔离目录、导入已有 `.minecraft`、导出整合包；`versions/` 下已安装版本会自动登记为实例（友好名称 + 加载器信息，删除后不再自动出现）；新建实例可从已安装版本下拉选择（加载器与启动版本自动识别），也可直接选择 `modpacks/`、下载目录中的 `.mrpack` / 整合包 zip 导入；支持把整合包、Mod、资源包直接拖入窗口安装 |
 | 一键装 Java | Adoptium Temurin JRE 自动下载解压到启动器目录，可指定 8/11/17/21/25 |
-| 离线启动 | 仅离线登录（离线 UUID 与 Java 版 `UUID.nameUUIDFromBytes` 完全一致）、Java 自动扫描与按版本挑选、内存 / 窗口 / JVM / 游戏参数、`natives` 解压、实时日志与结束进程 |
+| 离线启动 | 启动前自动检查版本文件是否完整，缺失时引导前往下载；仅离线登录（离线 UUID 与 Java 版 `UUID.nameUUIDFromBytes` 完全一致）、Java 自动扫描与按版本挑选、内存 / 窗口 / JVM / 游戏参数、`natives` 解压、实时日志与结束进程 |
 | 资源管理 | Mod（`fabric.mod.json` / `META-INF/mods.toml` / `mcmod.info`）、资源包（`pack.mcmeta`）、光影（`shaders/`）扫描；`.disabled` 启停 / 批量启停与删除；拖入安装；基于元数据的依赖缺失 / 重复 / 版本不匹配检查；Modrinth 指纹比对显示可更新版本并一键替换 |
 | 整合包 | Modrinth（`.mrpack`）、CurseForge（zip + `manifest.json`）、HMCL（`modpack.json`）、PCL（`PCL/Setup.ini`）导入；导出为 HMCL / PCL 包，Modrinth 导出为尽力而为模式 |
 | 下载引擎 | 并发线程池、按目标路径去重、镜像回退（BMCLAPI）、限速、取消、失败重试、按字节聚合的进度与速度；大文件（如整合包 `.mrpack`）自动 Range 多段并发，服务端不支持时回退单连接 |

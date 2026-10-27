@@ -983,6 +983,17 @@ class InstanceDetailPage(BasePage):
         instance = self.instance
         if instance is None:
             return
+        if not self.context.version_installed(instance.version_id):
+            if confirm(
+                self,
+                "版本文件缺失",
+                f"「{instance.name}」对应的版本 {instance.version_id} 尚未安装，是否前往下载页安装？",
+                ok_text="前往下载",
+            ):
+                navigate = getattr(self.window(), "navigate", None)
+                if callable(navigate):
+                    navigate("download")
+            return
         self._launch_button.set_loading(True, "启动中")
         self._launch_button.setEnabled(False)
 

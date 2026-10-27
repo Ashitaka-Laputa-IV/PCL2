@@ -17,7 +17,15 @@ from pcl.ui.widgets.progress import GradientProgressBar
 class ImportModpackDialog(BaseDialog):
     """导入整合包。"""
 
-    def __init__(self, context: AppContext, tasks, bridge, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        context: AppContext,
+        tasks,
+        bridge,
+        parent: QWidget | None = None,
+        *,
+        initial_path: Path | None = None,
+    ) -> None:
         super().__init__(parent, title="导入整合包", width=560)
         self.context = context
         self.tasks = tasks
@@ -58,6 +66,10 @@ class ImportModpackDialog(BaseDialog):
 
         self._ok = self.add_buttons("开始导入", "取消")
         self.bridge.download_progress.connect(self._on_progress)
+
+        if initial_path is not None:
+            self._path.setText(str(initial_path))
+            self._on_path_changed(str(initial_path))
 
     def _browse(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
