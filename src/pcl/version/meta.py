@@ -111,9 +111,22 @@ def evaluate_rules(
     return False
 
 
-def library_allowed(library: Mapping[str, Any], features: Mapping[str, bool] | None = None) -> bool:
-    """判断库条目是否适用于当前平台。"""
-    return evaluate_rules(library.get("rules"), features=features)
+def library_allowed(
+    library: Mapping[str, Any],
+    features: Mapping[str, bool] | None = None,
+    *,
+    os_name: str | None = None,
+    os_arch: str | None = None,
+    os_version: str | None = None,
+) -> bool:
+    """判断库条目是否适用于指定平台（默认当前平台）。"""
+    return evaluate_rules(
+        library.get("rules"),
+        features=features,
+        os_name=os_name,
+        os_arch=os_arch,
+        os_version=os_version,
+    )
 
 
 def maven_path(name: str) -> str | None:
