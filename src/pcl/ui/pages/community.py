@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from pcl.core.config import DownloadOptions
 from pcl.core.errors import friendly_message
+from pcl.core.logging import get_logger
 from pcl.resource.installer import install_version
 from pcl.resource.modrinth import ModrinthClient, Project, ProjectVersion
 from pcl.services import AppContext
@@ -24,6 +25,9 @@ from pcl.ui.remote_image import ImageLoader
 from pcl.ui.widgets.animated_button import AnimatedButton
 from pcl.ui.widgets.card import Card
 from pcl.ui.widgets.toast import show_toast
+from pcl.version.manifest import fetch_manifest
+
+log = get_logger(__name__)
 
 PROJECT_CHOICES = (
     ("mod", "Mod"),
@@ -107,6 +111,8 @@ class CommunityBrowser(QWidget):
         self._offset = 0
         self._total = 0
         self._busy = False
+        self._manifest_loading = False
+        self._manifest_ready = False
         self._build()
 
     # ---------- 构建 ----------
@@ -138,7 +144,12 @@ class CommunityBrowser(QWidget):
         filters2.setSpacing(8)
         self._game_version = QComboBox(self)
         self._game_version.setEditable(True)
+        self._game_version.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self._game_version.addItem("全部版本", "")
+        completer = self._game_version.completer()
+        if completer is not None:
+            completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+            completer.setFilterMode(Qt.MatchFlag.MatchContains)
         self._loader = QComboBox(self)
         for key, label in LOADER_CHOICES:
             self._loader.addItem(label, key)
@@ -252,21 +263,61 @@ class CommunityBrowser(QWidget):
             self._status.setText("还没有安装任何版本，请先在「下载」页安装游戏版本。")
 
     def _reload_game_versions(self) -> None:
-        if self._game_version.count() > 1:
+        """游戏版本筛选使用完整版本清单（含未安装的版本）。"""
+        if self._manifest_ready or self._manifest_loading:
             return
-        entries = self.context.installed_versions()
-        for version_id in sorted(entries, reverse=True)[:30]:
+        self._manifest_loading = True
+        cache = self.context.paths.cache / "version_manifest_v2.json"
+        current = self._game_version.currentText()
+
+        def done(manifest) -> None:
+            self._manifest_loading = False
+            self._manifest_ready = True
+            ids = [entry.id for entry in manifest.versions or []]
+            self._fill_game_versions(ids, current)
+
+        def failed(message: str) -> None:
+            # 拉不到清单时退回已安装版本，保证筛选框仍可用
+            self._manifest_loading = False
+            log.debug("获取版本清单失败，改用已安装版本：%s", message)
+            self._fill_game_versions(sorted(self.context.installed_versions(), reverse=True), current)
+
+        self.tasks.submit(
+            fetch_manifest,
+            self.context.client(),
+            cache,
+            source=self.context.config.download.source,
+            mirror_base=self.context.config.download.mirror_base,
+            on_done=done,
+            on_error=failed,
+        )
+
+    def _fill_game_versions(self, version_ids, current: str) -> None:
+        self._game_version.blockSignals(True)
+        self._game_version.clear()
+        self._game_version.addItem("全部版本", "")
+        for version_id in version_ids:
             self._game_version.addItem(version_id, version_id)
+        self._game_version.blockSignals(False)
+        if current and current != "全部版本":
+            index = self._game_version.findText(current)
+            if index >= 0:
+                self._game_version.setCurrentIndex(index)
+            else:
+                self._game_version.setEditText(current)
 
     def _current_project_type(self) -> str:
         return str(self._type.currentData() or "mod")
 
     def _current_game_version(self) -> str:
-        data = self._game_version.currentData()
-        if data:
-            return str(data)
         text = self._game_version.currentText().strip()
-        return "" if text in ("", "全部版本") else text
+        if not text or text == "全部版本":
+            return ""
+        index = self._game_version.currentIndex()
+        # 手动输入时以输入框为准，避免沿用上一次选中的条目
+        if index < 0 or self._game_version.itemText(index) != text:
+            return text
+        return str(self._game_version.itemData(index) or text)
 
     def _current_loader(self) -> str:
         return str(self._loader.currentData() or "")
