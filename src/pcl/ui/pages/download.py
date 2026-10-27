@@ -147,6 +147,7 @@ class DownloadPage(BasePage):
         self._version_list = QListWidget(page)
         self._version_list.setMinimumWidth(280)
         self._version_list.currentItemChanged.connect(self._on_version_selected)
+        self._version_list.itemDoubleClicked.connect(lambda _item: self._install_selected_version())
         left.addWidget(self._version_list, 1)
         layout.addLayout(left, 2)
 

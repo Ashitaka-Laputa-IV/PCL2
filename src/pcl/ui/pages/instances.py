@@ -145,6 +145,9 @@ class InstanceCard(Card):
         actions.addStretch(1)
         self.body.addLayout(actions)
 
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(lambda _point: self._show_menu(self))
+
     def _show_menu(self, anchor: QWidget) -> None:
         menu = QMenu(self)
         menu.addAction("详情与设置", lambda: self.page.open_detail(self.instance))

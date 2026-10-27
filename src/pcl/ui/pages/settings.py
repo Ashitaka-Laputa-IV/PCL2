@@ -191,6 +191,9 @@ class SettingsPage(BasePage):
         self._fullscreen = ToggleSwitch(card)
         card.add(self._row("全屏启动", "启动后直接进入全屏模式", self._fullscreen))
 
+        self._minimize = ToggleSwitch(card)
+        card.add(self._row("启动后最小化启动器", "游戏开始运行后自动最小化，游戏退出时自动恢复窗口", self._minimize))
+
         self._jvm_args = QLineEdit(card)
         self._jvm_args.setPlaceholderText("例如：-XX:+UseG1GC -Dfile.encoding=UTF-8")
         self._jvm_args.setMinimumWidth(320)
@@ -310,6 +313,7 @@ class SettingsPage(BasePage):
         self._width.setValue(config.launch.window_width)
         self._height.setValue(config.launch.window_height)
         self._fullscreen.setChecked(config.launch.fullscreen)
+        self._minimize.setChecked(config.launch.minimize_on_launch)
         self._jvm_args.setText(" ".join(config.launch.jvm_args))
         self._game_args.setText(" ".join(config.launch.game_args))
 
@@ -403,6 +407,7 @@ class SettingsPage(BasePage):
         config.launch.window_width = self._width.value()
         config.launch.window_height = self._height.value()
         config.launch.fullscreen = self._fullscreen.isChecked()
+        config.launch.minimize_on_launch = self._minimize.isChecked()
         config.launch.jvm_args = self._jvm_args.text().split()
         config.launch.game_args = self._game_args.text().split()
 

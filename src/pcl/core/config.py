@@ -42,6 +42,7 @@ class LaunchOptions:
     window_height: int = 480
     fullscreen: bool = False
     auto_java: bool = True
+    minimize_on_launch: bool = False
     jvm_args: list[str] = field(default_factory=list)
     game_args: list[str] = field(default_factory=list)
     show_log_window: bool = True

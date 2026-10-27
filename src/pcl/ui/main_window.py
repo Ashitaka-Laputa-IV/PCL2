@@ -128,6 +128,7 @@ class MainWindow(QMainWindow):
         self.bridge = bridge or EventBridge(self)
         self.tasks = tasks or TaskRunner(self)
         self._log_window: LogWindow | None = None
+        self._minimized_for_game = False
         self._current_page = ""
         self._animation: QPropertyAnimation | None = None
 
@@ -354,7 +355,17 @@ class MainWindow(QMainWindow):
             page.on_game_state(state)
         running = bool(getattr(state, "running", False))
         code = getattr(state, "exit_code", None)
-        if running or code in (None, 0):
+        if running:
+            if self.context.config.launch.minimize_on_launch and not self.isMinimized():
+                self.showMinimized()
+                self._minimized_for_game = True
+            return
+        if self._minimized_for_game:
+            self._minimized_for_game = False
+            self.showNormal()
+            self.raise_()
+            self.activateWindow()
+        if code in (None, 0):
             return
         if not self.context.config.advanced.auto_analyze_crash:
             return
