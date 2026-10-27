@@ -31,6 +31,7 @@ from pcl.instance.saves import WorldInfo, backup_world, delete_world, scan_world
 from pcl.instance.servers import ServerEntry, ServerList
 from pcl.services import AppContext
 from pcl.ui.dialogs.confirm import ask_text, confirm
+from pcl.ui import icons
 from pcl.ui.dialogs.crash_report import show_crash_report
 from pcl.ui.pages.base import BasePage
 from pcl.ui.widgets.animated_button import AnimatedButton
@@ -525,11 +526,10 @@ class InstanceDetailPage(BasePage):
             banner.setVisible(False)
 
         if not items:
-            empty = QLabel("这里还是空的，点击右下角「导入文件」或直接拖入。", self)
-            empty.setObjectName("Muted")
-            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            empty.setMinimumHeight(120)
-            layout.insertWidget(layout.count() - 1, empty)
+            layout.insertWidget(
+                layout.count() - 1,
+                self._empty_hint("这里还是空的，点击右下角「导入文件」或直接拖入。", 120),
+            )
             return
 
         for item in items:
@@ -605,6 +605,23 @@ class InstanceDetailPage(BasePage):
         )
 
     # ---------- 存档 ----------
+    def _empty_hint(self, text: str, height: int = 150) -> QWidget:
+        box = QWidget(self)
+        layout = QVBoxLayout(box)
+        layout.setContentsMargins(0, 18, 0, 18)
+        layout.setSpacing(8)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon = QLabel(box)
+        icon.setPixmap(icons.pixmap("inbox", "#94A3B8", 44))
+        icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        label = QLabel(text, box)
+        label.setObjectName("Muted")
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(icon)
+        layout.addWidget(label)
+        box.setMinimumHeight(height)
+        return box
+
     def _load_worlds(self) -> None:
         while self._worlds_list.count():
             item = self._worlds_list.takeAt(0)
@@ -617,11 +634,7 @@ class InstanceDetailPage(BasePage):
             return
         worlds = scan_worlds(instance.game_dir(self.context.paths))
         if not worlds:
-            empty = QLabel("还没有存档。进入游戏创建世界后会显示在这里。", self)
-            empty.setObjectName("Muted")
-            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            empty.setMinimumHeight(160)
-            self._worlds_list.addWidget(empty)
+            self._worlds_list.addWidget(self._empty_hint("还没有存档，进入游戏创建世界后会显示在这里。"))
             return
 
         for world in worlds:
@@ -715,11 +728,9 @@ class InstanceDetailPage(BasePage):
             return
         entries = server_list.load()
         if not entries:
-            empty = QLabel("还没有服务器。可以添加常用服务器，一键启动并连接。", self)
-            empty.setObjectName("Muted")
-            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            empty.setMinimumHeight(160)
-            self._server_list_layout.addWidget(empty)
+            self._server_list_layout.addWidget(
+                self._empty_hint("还没有服务器，添加后可以一键启动并连接。")
+            )
             return
         for entry in entries:
             self._server_list_layout.addWidget(self._server_card(entry))

@@ -137,6 +137,10 @@ class DownloadPage(BasePage):
         self._detail_meta.setWordWrap(True)
         detail.add(self._detail_title)
         detail.add(self._detail_meta)
+        self._detail_info = QLabel("", detail)
+        self._detail_info.setObjectName("Muted")
+        self._detail_info.setWordWrap(True)
+        detail.add(self._detail_info)
         detail.addStretch(1)
 
         self._create_instance_check = QCheckBox("安装完成后自动创建实例", detail)
@@ -328,6 +332,12 @@ class DownloadPage(BasePage):
                 f"{meta.version_type_label(entry.type)}　·　发布于 {entry.release_date or '未知'}"
             )
         installed = self.context.version_installed(version_id)
+        source_label = {"auto": "自动选择", "official": "官方源", "mirror": "BMCLAPI 镜像"}.get(
+            self.context.config.download.source, self.context.config.download.source
+        )
+        self._detail_info.setText(
+            f"安装位置：{self.context.paths.version_dir(version_id)}\n下载源：{source_label}"
+        )
         self._detail_hint.setText("该版本已安装，可重复安装以修复文件。" if installed else "")
         self._install_button.setText("重新安装" if installed else "安装该版本")
         self._install_button.setEnabled(True)

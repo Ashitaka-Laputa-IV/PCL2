@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 from pcl.core.errors import friendly_message
 from pcl.instance.model import Instance
 from pcl.services import AppContext
+from pcl.ui import icons
 from pcl.ui.dialogs.confirm import ask_text, confirm
 from pcl.ui.dialogs.import_modpack import ImportModpackDialog
 from pcl.ui.dialogs.new_instance import NewInstanceDialog
@@ -30,6 +31,24 @@ from pcl.ui.pages.base import BasePage
 from pcl.ui.widgets.animated_button import AnimatedButton
 from pcl.ui.widgets.card import Card
 from pcl.ui.widgets.toast import show_toast
+
+
+LOADER_COLORS = {
+    "fabric": "#D9A24B",
+    "quilt": "#A855F7",
+    "forge": "#64748B",
+    "neoforge": "#F97316",
+    "vanilla": "#22C55E",
+}
+
+
+def _chip_style(color: str) -> str:
+    qcolor = QColor(color)
+    return (
+        f"background: rgba({qcolor.red()}, {qcolor.green()}, {qcolor.blue()}, 0.14);"
+        f" color: {color}; border-radius: 9px; padding: 3px 10px;"
+        " font-size: 12px; font-weight: 600;"
+    )
 
 
 def _initial_pixmap(text: str, color: QColor, size: int = 48) -> QPixmap:
@@ -88,7 +107,7 @@ class InstanceCard(Card):
         tags.addWidget(version_tag)
         loader_text = instance.loader.capitalize() if instance.loader != "vanilla" else "原版"
         loader_tag = QLabel(loader_text, self)
-        loader_tag.setObjectName("Tag")
+        loader_tag.setStyleSheet(_chip_style(LOADER_COLORS.get(instance.loader, "#2E7CF6")))
         tags.addWidget(loader_tag)
         tags.addStretch(1)
         texts.addLayout(tags)
@@ -188,6 +207,10 @@ class InstancesPage(BasePage):
         self._empty = QWidget(self)
         empty_layout = QVBoxLayout(self._empty)
         empty_layout.setContentsMargins(0, 40, 0, 40)
+        empty_icon = QLabel(self._empty)
+        empty_icon.setPixmap(icons.pixmap("inbox", "#2E7CF6", 56))
+        empty_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_layout.addWidget(empty_icon)
         empty_title = QLabel("还没有任何实例", self._empty)
         empty_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         empty_title.setStyleSheet("font-size: 17px; font-weight: 600;")

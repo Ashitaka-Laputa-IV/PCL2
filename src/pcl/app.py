@@ -13,6 +13,7 @@ from pcl.core.errors import friendly_message
 from pcl.core.logging import get_logger, get_ring_buffer, setup_logging
 from pcl.core.paths import AppPaths, default_data_root, set_paths
 from pcl.services import AppContext
+from pcl.ui import icons
 from pcl.ui.main_window import MainWindow
 
 log = get_logger(__name__)
@@ -49,6 +50,7 @@ def create_application(argv: list[str] | None = None) -> QApplication:
     app.setApplicationDisplayName(APP_NAME)
     app.setApplicationVersion(__version__)
     app.setOrganizationName("PCL2-Python")
+    app.setWindowIcon(icons.icon("logo", "#2E7CF6", 64))
     return app  # type: ignore[return-value]
 
 
