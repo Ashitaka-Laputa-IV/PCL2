@@ -41,6 +41,14 @@ from pcl.version.manifest import VersionEntry
 log = get_logger(__name__)
 
 _TOKEN_PATTERN = re.compile(r"\{([A-Za-z0-9_]+)\}")
+#: 处理器参数里直接写死的 maven 坐标，例如 ``[de.oceanlabs.mcp:mcp_config:1.20.1-...@zip]``
+_COORD_PATTERN = re.compile(r"^\[([^\[\]]+)\]$")
+
+
+def _bracket_coord(value: str) -> str:
+    """把 ``[group:artifact:version@ext]`` 解析成 maven 坐标，否则返回空串。"""
+    match = _COORD_PATTERN.match(str(value).strip())
+    return match.group(1) if match else ""
 
 
 def _version_at_least(version: str, target: str) -> bool:
@@ -355,6 +363,19 @@ class ForgeInstaller:
         return runtime
 
     @staticmethod
+    def _processor_artifacts(profile: InstallProfile) -> list[str]:
+        """收集处理器参数中直接写死的 maven 坐标（需要预先下载）。"""
+        coords: list[str] = []
+        for processor in profile.processors:
+            if not isinstance(processor, Mapping):
+                continue
+            for arg in processor.get("args") or []:
+                coord = _bracket_coord(str(arg))
+                if coord and coord not in coords:
+                    coords.append(coord)
+        return coords
+
+    @staticmethod
     def _processor_main_class(jar_path: Path) -> str | None:
         try:
             with zipfile.ZipFile(jar_path) as archive:
@@ -423,7 +444,18 @@ class ForgeInstaller:
             if not main_class:
                 raise LoaderError(f"处理器 jar 缺少 Main-Class：{jar_coord}")
 
-            args = [str(self._substitute(arg, variables)) for arg in processor.get("args") or []]
+            args: list[str] = []
+            for raw in processor.get("args") or []:
+                text = str(raw)
+                coord = _bracket_coord(text)
+                if coord:
+                    # 官方安装器会先把坐标下载到 libraries 再传本地路径
+                    relative = maven_coord_path(coord)
+                    target = self.paths.libraries / relative if relative else None
+                    if target is None or not target.is_file():
+                        raise LoaderError(f"缺少处理器输入文件：{coord}", detail=f"{jar_coord}")
+                    text = str(target)
+                args.append(self._substitute(text, variables))
             unresolved = [token for token in _TOKEN_PATTERN.findall(" ".join(args)) if token not in variables]
             if unresolved:
                 raise LoaderError(
@@ -522,6 +554,18 @@ class ForgeInstaller:
                             name=coord,
                         )
                     )
+
+            # 处理器参数里直接引用的 maven 工件（如 mcp_config）也要先下载
+            for coord in self._processor_artifacts(profile):
+                path = maven_coord_path(coord)
+                if not path:
+                    continue
+                dest = self.paths.libraries / path
+                if dest.is_file():
+                    continue
+                processor_tasks.append(
+                    DownloadTask(url=f"{self.maven_base}/{path}", dest=dest, priority=20, name=coord)
+                )
 
             manager = DownloadManager(self.options)
             summary = manager.run([*tasks, *processor_tasks])

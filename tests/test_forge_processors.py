@@ -131,6 +131,93 @@ def test_missing_data_token_raises(paths: Path, tmp_path, monkeypatch) -> None:
         installer._run_processors(profile, tmp_path / "work2", installer_path)
 
 
+def _make_coord_installer(target: Path, coord: str) -> None:
+    profile = {
+        "spec": 1,
+        "minecraft": "1.20.1",
+        "version": "1.20.1-forge-47.4.10",
+        "json": "/version.json",
+        "path": "net.minecraftforge:forge:1.20.1-47.4.10",
+        "libraries": [],
+        "processors": [
+            {
+                "sides": ["client"],
+                "jar": "net.minecraftforge:binarypatcher:1.3.4",
+                "classpath": [],
+                # 官方安装器的 EXTRACT/MCP_DATA 步骤会把坐标直接写在参数里
+                "args": ["--task", "MCP_DATA", "--input", f"[{coord}]", "--key", "mappings"],
+            }
+        ],
+        "data": {},
+    }
+    with zipfile.ZipFile(target, "w") as archive:
+        archive.writestr("install_profile.json", json.dumps(profile))
+        archive.writestr("version.json", json.dumps({"id": "1.20.1-forge-47.4.10"}))
+
+
+def test_processor_bracket_coordinate_becomes_local_path(paths: Path, tmp_path, monkeypatch) -> None:
+    coord = "de.oceanlabs.mcp:mcp_config:1.20.1-20230612.114412@zip"
+    installer_path = tmp_path / "installer3.jar"
+    _make_coord_installer(installer_path, coord)
+
+    jar = paths.libraries / "net/minecraftforge/binarypatcher/1.3.4/binarypatcher-1.3.4.jar"
+    _make_library(jar)
+    mcp_config = paths.libraries / "de/oceanlabs/mcp/mcp_config/1.20.1-20230612.114412/mcp_config-1.20.1-20230612.114412.zip"
+    _make_library(mcp_config, main_class="unused")
+    client_jar = paths.version_jar("1.20.1")
+    client_jar.parent.mkdir(parents=True, exist_ok=True)
+    client_jar.write_bytes(b"client")
+
+    class _Runtime:
+        path = Path("/usr/bin/java")
+        version = "17.0.9"
+        major = 17
+
+    monkeypatch.setattr("pcl.version.loaders.forge.probe_java", lambda _path: _Runtime())
+    monkeypatch.setattr("pcl.version.loaders.forge.find_java", lambda: _Runtime())
+    captured: dict[str, list[str]] = {}
+
+    def fake_run(command, *_args, **_kwargs):
+        captured["command"] = list(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr("pcl.version.loaders.forge.subprocess.run", fake_run)
+
+    installer = ForgeInstaller(paths, DownloadOptions(), kind="forge")
+    profile = installer.read_profile(installer_path, "1.20.1")
+    assert installer._processor_artifacts(profile) == [coord]
+    installer._run_processors(profile, tmp_path / "work3", installer_path)
+
+    command = captured["command"]
+    assert str(mcp_config) in command
+    assert f"[{coord}]" not in command
+
+
+def test_processor_bracket_coordinate_missing_raises(paths: Path, tmp_path, monkeypatch) -> None:
+    coord = "de.oceanlabs.mcp:mcp_config:1.20.1-20230612.114412@zip"
+    installer_path = tmp_path / "installer4.jar"
+    _make_coord_installer(installer_path, coord)
+
+    jar = paths.libraries / "net/minecraftforge/binarypatcher/1.3.4/binarypatcher-1.3.4.jar"
+    _make_library(jar)
+    client_jar = paths.version_jar("1.20.1")
+    client_jar.parent.mkdir(parents=True, exist_ok=True)
+    client_jar.write_bytes(b"client")
+
+    class _Runtime:
+        path = Path("/usr/bin/java")
+        version = "17.0.9"
+        major = 17
+
+    monkeypatch.setattr("pcl.version.loaders.forge.probe_java", lambda _path: _Runtime())
+    monkeypatch.setattr("pcl.version.loaders.forge.find_java", lambda: _Runtime())
+
+    installer = ForgeInstaller(paths, DownloadOptions(), kind="forge")
+    profile = installer.read_profile(installer_path, "1.20.1")
+    with pytest.raises(LoaderError):
+        installer._run_processors(profile, tmp_path / "work4", installer_path)
+
+
 def test_version_compare() -> None:
     assert _version_at_least("26.3", "1.20.5") is True
     assert _version_at_least("1.20.6", "1.20.5") is True
