@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPixmap
+from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QFileDialog,
     QGridLayout,
@@ -41,7 +42,10 @@ def _initial_pixmap(text: str, color: QColor, size: int = 48) -> QPixmap:
     rect = QRectF(0, 0, size * dpr, size * dpr)
     path = QPainterPath()
     path.addRoundedRect(rect.adjusted(0, 0, -1, -1), 12 * dpr, 12 * dpr)
-    painter.fillPath(path, QColor(color))
+    gradient = QLinearGradient(rect.topLeft(), rect.bottomRight())
+    gradient.setColorAt(0.0, QColor(color).lighter(112))
+    gradient.setColorAt(1.0, QColor(color).darker(118))
+    painter.fillPath(path, gradient)
     painter.setPen(QColor("#FFFFFF"))
     font = QFont()
     font.setWeight(QFont.Weight.Bold)
@@ -92,10 +96,17 @@ class InstanceCard(Card):
 
         self.body.addLayout(top)
 
-        hint = QLabel(
-            "已安装" if page.context.version_installed(instance.version_id) else "游戏文件缺失，请先在下载页安装",
-            self,
+        state_text = (
+            "已安装"
+            if page.context.version_installed(instance.version_id)
+            else "游戏文件缺失，请先在下载页安装"
         )
+        played = (
+            f"最近游玩 {time.strftime('%m-%d %H:%M', time.localtime(instance.last_played_at))}"
+            if instance.last_played_at
+            else "尚未启动过"
+        )
+        hint = QLabel(f"{state_text} · {played}", self)
         hint.setObjectName("Muted")
         self.body.addWidget(hint)
 
@@ -105,7 +116,9 @@ class InstanceCard(Card):
         launch.clicked.connect(lambda: page.launch_instance(instance))
         detail = AnimatedButton("详情", self, variant="secondary", height=32)
         detail.clicked.connect(lambda: page.open_detail(instance))
-        more = AnimatedButton("更多", self, variant="secondary", height=32)
+        more = AnimatedButton("", self, variant="ghost", icon_name="more", height=32)
+        more.setFixedWidth(38)
+        more.setToolTip("更多操作")
         more.clicked.connect(lambda: self._show_menu(more))
         actions.addWidget(launch)
         actions.addWidget(detail)
@@ -212,11 +225,13 @@ class InstancesPage(BasePage):
         self._summary.setText(f"共 {len(instances)} 个实例")
         self._empty.setVisible(not instances)
 
-        columns = max(1, min(3, (self._scroll.width() - 24) // 300 or 1))
+        columns = max(1, min(4, (self._scroll.width() - 24) // 340 or 1))
         for index, instance in enumerate(instances):
             card = InstanceCard(instance, self, self)
+            card.setFixedWidth(360)
             self._grid.addWidget(card, index // columns, index % columns)
             self._cards.append(card)
+        self._grid.setColumnStretch(columns, 1)
 
     # ---------- 操作 ----------
     def open_detail(self, instance: Instance) -> None:

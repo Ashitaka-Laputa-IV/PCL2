@@ -15,16 +15,16 @@ log = get_logger(__name__)
 STYLE_FILE = Path(__file__).resolve().parent.parent / "resources" / "styles" / "base.qss"
 
 LIGHT: dict[str, str] = {
-    "bg": "#F4F6F9",
-    "bg_alt": "#EAEEF5",
+    "bg": "#F4F6FA",
+    "bg_alt": "#E9EDF4",
     "surface": "#FFFFFF",
-    "surface_alt": "#F1F4F9",
+    "surface_alt": "#F3F6FA",
     "surface_hover": "#E9F0FB",
     "text": "#1F2329",
     "text_muted": "#5F6B7A",
     "text_disabled": "#A6AFBD",
-    "border": "#E5E8EE",
-    "border_strong": "#D3D9E3",
+    "border": "#E6EAF2",
+    "border_strong": "#D6DCE7",
     "success": "#22C55E",
     "warning": "#F59E0B",
     "danger": "#EF4444",
@@ -60,6 +60,7 @@ def tokens_for(theme: str, accent: str, corner_radius: int = 8, font_scale: floa
     tokens["accent_hover"] = _lighten(accent, 0.12)
     tokens["accent_pressed"] = _darken(accent, 0.14)
     tokens["accent_soft"] = _alpha(accent, 0.14 if theme != "dark" else 0.22)
+    tokens["border_soft"] = _alpha(tokens["border"], 0.75)
     tokens["radius"] = f"{int(corner_radius)}px"
     base = 13 * float(font_scale)
     tokens["font_size"] = f"{base:.1f}px"

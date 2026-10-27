@@ -59,7 +59,8 @@ class DropZone(QWidget):
 
     def __init__(self, text: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setMinimumHeight(180)
+        self.setMinimumHeight(150)
+        self.setMaximumHeight(190)
         self._text = text
 
     def paintEvent(self, event) -> None:  # noqa: N802
@@ -268,7 +269,7 @@ class ContentPage(BasePage):
             self._banner.setVisible(False)
 
         if not items:
-            self._show_empty(layout, "这里还是空的，点击「导入文件」或直接拖入文件。")
+            self._show_empty(layout, "把 Mod / 资源包 / 光影文件拖到这里，或点击右上角「导入文件」。")
             return
 
         for item in items:
@@ -276,7 +277,7 @@ class ContentPage(BasePage):
         self._hint.setText(f"目录：{manager.directory(kind)}")
 
     def _show_empty(self, layout: QVBoxLayout, text: str) -> None:
-        zone = DropZone(f"{text}\n\n把文件拖到这里即可安装", self)
+        zone = DropZone(text, self)
         layout.insertWidget(layout.count() - 1, zone)
 
     def _update_banner(self, report) -> None:

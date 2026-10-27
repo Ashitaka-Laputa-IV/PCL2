@@ -135,7 +135,13 @@ class SettingsPage(BasePage):
             hint.setWordWrap(True)
             texts.addWidget(hint)
         row.addLayout(texts, 1)
-        row.addWidget(control, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        wrapper = QWidget(container)
+        wrapper_layout = QHBoxLayout(wrapper)
+        wrapper_layout.setContentsMargins(0, 0, 0, 0)
+        wrapper_layout.setSpacing(0)
+        wrapper_layout.addWidget(control, 0, Qt.AlignmentFlag.AlignLeft)
+        wrapper_layout.addStretch(1)
+        row.addWidget(wrapper, 2)
         return container
 
     def _card(self, title: str) -> Card:

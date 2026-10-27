@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPaintEvent
+from PySide6.QtCore import QRectF, Qt, Signal
+from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPaintEvent, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QGridLayout,
@@ -16,11 +16,65 @@ from PySide6.QtWidgets import (
 
 from pcl.core.errors import friendly_message
 from pcl.services import AppContext
+from pcl.ui import icons
 from pcl.ui.pages.base import BasePage
 from pcl.ui.widgets.animated_button import AnimatedButton
 from pcl.ui.widgets.card import Card
 from pcl.ui.widgets.progress import GradientProgressBar, RingProgress
 from pcl.ui.widgets.toast import show_toast
+
+
+class QuickTile(Card):
+    """快捷入口磁贴：图标徽标 + 标题 + 说明。"""
+
+    clicked = Signal()
+
+    def __init__(self, icon_name: str, title: str, subtitle: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent, hover_lift=True, padding=12, spacing=0)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        row = QHBoxLayout()
+        row.setSpacing(11)
+        badge = QLabel(self)
+        badge.setFixedSize(40, 40)
+        badge.setPixmap(_badge_pixmap(icon_name, self.palette().highlight().color(), 40))
+        row.addWidget(badge)
+        texts = QVBoxLayout()
+        texts.setSpacing(1)
+        name = QLabel(title, self)
+        name.setStyleSheet("font-size: 14px; font-weight: 600;")
+        hint = QLabel(subtitle, self)
+        hint.setObjectName("Muted")
+        texts.addWidget(name)
+        texts.addWidget(hint)
+        row.addLayout(texts, 1)
+        container = QWidget(self)
+        container.setLayout(row)
+        self.add(container)
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
+            self.clicked.emit()
+        super().mouseReleaseEvent(event)
+
+
+def _badge_pixmap(name: str, accent: QColor, size: int = 40) -> QPixmap:
+    dpr = 2
+    pixmap = QPixmap(size * dpr, size * dpr)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    rect = QRectF(0, 0, size * dpr, size * dpr)
+    path = QPainterPath()
+    path.addRoundedRect(rect, 12 * dpr, 12 * dpr)
+    soft = QColor(accent)
+    soft.setAlpha(42)
+    painter.fillPath(path, soft)
+    icon = icons.pixmap(name, accent.name(), int(size * 0.54))
+    if not icon.isNull():
+        painter.drawPixmap(int((size * dpr - icon.width()) / 2), int((size * dpr - icon.height()) / 2), icon)
+    painter.end()
+    pixmap.setDevicePixelRatio(dpr)
+    return pixmap
 
 
 class LaunchDial(QWidget):
@@ -167,7 +221,7 @@ class HomePage(BasePage):
         hero_layout.addLayout(info, 1)
         outer.addWidget(self._hero)
 
-        # 快捷入口 + 任务摘要
+        # 快捷入口 + 最近游玩
         bottom = QHBoxLayout()
         bottom.setSpacing(16)
 
@@ -185,34 +239,57 @@ class HomePage(BasePage):
             ("设置", "settings", "Java、主题与下载选项"),
         )
         for index, (label, page, hint) in enumerate(entries):
-            button = AnimatedButton(f"{label}\n{hint}", quick, variant="secondary", icon_name=page, radius=10)
-            button.setMinimumHeight(62)
-            button.setToolTip(hint)
-            button.clicked.connect(lambda _=False, target=page: self._navigate(target))
-            grid.addWidget(button, index // 2, index % 2)
-        quick.add_layout(grid, 1)
+            tile = QuickTile(page, label, hint, quick)
+            tile.clicked.connect(lambda target=page: self._navigate(target))
+            grid.addWidget(tile, index // 2, index % 2)
+        quick.add_layout(grid)
         quick.addStretch(1)
         bottom.addWidget(quick, 3)
 
-        tasks_card = Card(self, padding=18, spacing=10)
-        task_title = QLabel("最近任务", tasks_card)
-        task_title.setObjectName("SectionTitle")
-        tasks_card.add(task_title)
-        self._task_label = QLabel("暂无下载任务", tasks_card)
-        self._task_label.setObjectName("Muted")
-        tasks_card.add(self._task_label)
-        self._task_bar = GradientProgressBar(tasks_card, height=8)
-        self._task_bar.set_value(0)
-        self._task_bar.setVisible(False)
-        tasks_card.add(self._task_bar)
-        self._task_detail = QLabel("", tasks_card)
-        self._task_detail.setObjectName("Muted")
-        tasks_card.add(self._task_detail)
-        tasks_card.addStretch(1)
-        bottom.addWidget(tasks_card, 2)
+        recent = Card(self, padding=18, spacing=8)
+        header = QHBoxLayout()
+        recent_title = QLabel("最近游玩", recent)
+        recent_title.setObjectName("SectionTitle")
+        more = AnimatedButton("全部实例", recent, variant="ghost", height=26)
+        more.clicked.connect(lambda: self._navigate("instances"))
+        header.addWidget(recent_title)
+        header.addStretch(1)
+        header.addWidget(more)
+        recent.add_layout(header)
+        self._recent_box = QVBoxLayout()
+        self._recent_box.setSpacing(6)
+        recent.add_layout(self._recent_box)
+        recent.addStretch(1)
+        bottom.addWidget(recent, 2)
 
-        outer.addLayout(bottom, 1)
+        outer.addLayout(bottom)
+        outer.addStretch(1)
         self._refresh_choices()
+
+    def _refresh_recent(self) -> None:
+        while self._recent_box.count():
+            item = self._recent_box.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        instances = self.context.instances.list_instances()[:4]
+        if not instances:
+            empty = QLabel("还没有实例，去「下载」安装一个吧。", self)
+            empty.setObjectName("Muted")
+            self._recent_box.addWidget(empty)
+            return
+        for instance in instances:
+            subtitle = instance.mc_version
+            if instance.loader != "vanilla":
+                subtitle += f" · {instance.loader.capitalize()}"
+            tile = QuickTile("instances", instance.name, subtitle, self)
+            tile.clicked.connect(lambda target=instance.id: self._open_instance(target))
+            self._recent_box.addWidget(tile)
+
+    def _open_instance(self, instance_id: str) -> None:
+        window = self.window()
+        if hasattr(window, "open_instance_detail"):
+            window.open_instance_detail(instance_id)
 
     # ---------- 导航 ----------
     def _navigate(self, page: str) -> None:
@@ -264,6 +341,7 @@ class HomePage(BasePage):
         self._account_combo.blockSignals(False)
 
         self._update_hero(current)
+        self._refresh_recent()
 
     def _update_hero(self, instance) -> None:
         if instance is None:
@@ -373,14 +451,11 @@ class HomePage(BasePage):
 
     def _on_download_progress(self, progress: object) -> None:
         percent = float(getattr(progress, "percent", 0.0))
-        speed = float(getattr(progress, "speed", 0.0))
-        current = str(getattr(progress, "current", ""))
         active = int(getattr(progress, "active", 0))
-        self._task_bar.set_value(percent)
-        if active <= 0 and percent <= 0:
-            self._task_label.setText("暂无下载任务")
-            self._task_detail.setText("")
-            return
-        self._task_label.setText(f"正在下载 · {percent:.1f}%")
-        speed_text = f"{speed / 1024 / 1024:.1f} MB/s" if speed > 0 else "—"
-        self._task_detail.setText(f"{current or '准备中'} · {speed_text}")
+        current = str(getattr(progress, "current", ""))
+        if self._dial is not None:
+            self._dial.set_progress(percent if active else 0.0)
+        if active > 0:
+            self._hint_label.setText(f"下载中 {percent:.1f}% · {current}")
+        elif self._dial is not None:
+            self._dial.set_progress(0.0)
