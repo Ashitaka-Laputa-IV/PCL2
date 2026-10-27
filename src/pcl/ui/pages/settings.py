@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from pcl.core.config import ACCENT_COLORS, load_config, save_config
+from pcl.launch.gpu import GPU_LABELS
 from pcl.services import AppContext
 from pcl.ui.dialogs.confirm import confirm
 from pcl.ui.pages.base import BasePage
@@ -191,6 +192,18 @@ class SettingsPage(BasePage):
         self._fullscreen = ToggleSwitch(card)
         card.add(self._row("全屏启动", "启动后直接进入全屏模式", self._fullscreen))
 
+        self._gpu = QComboBox(card)
+        self._gpu.setMinimumWidth(180)
+        for key, label in GPU_LABELS.items():
+            self._gpu.addItem(label, key)
+        card.add(
+            self._row(
+                "显卡",
+                "开光影卡顿时可强制使用独立显卡；Linux 走 PRIME，Windows 写系统显卡首选项，重启游戏生效",
+                self._gpu,
+            )
+        )
+
         self._minimize = ToggleSwitch(card)
         card.add(self._row("启动后最小化启动器", "游戏开始运行后自动最小化，游戏退出时自动恢复窗口", self._minimize))
 
@@ -314,6 +327,7 @@ class SettingsPage(BasePage):
         self._height.setValue(config.launch.window_height)
         self._fullscreen.setChecked(config.launch.fullscreen)
         self._minimize.setChecked(config.launch.minimize_on_launch)
+        self._gpu.setCurrentIndex(max(0, self._gpu.findData(config.launch.gpu)))
         self._jvm_args.setText(" ".join(config.launch.jvm_args))
         self._game_args.setText(" ".join(config.launch.game_args))
 
@@ -353,7 +367,7 @@ class SettingsPage(BasePage):
                 signal.connect(self._schedule_save)
         for widget in (self._fullscreen, self._animations, self._dark, self._auto_crash):
             widget.toggled.connect(self._schedule_save)
-        for widget in (self._source, self._java_combo):
+        for widget in (self._source, self._java_combo, self._gpu):
             widget.currentIndexChanged.connect(self._schedule_save)
 
     def _refresh_java_combo(self, selected: str = "") -> None:
@@ -408,6 +422,7 @@ class SettingsPage(BasePage):
         config.launch.window_height = self._height.value()
         config.launch.fullscreen = self._fullscreen.isChecked()
         config.launch.minimize_on_launch = self._minimize.isChecked()
+        config.launch.gpu = str(self._gpu.currentData() or "auto")
         config.launch.jvm_args = self._jvm_args.text().split()
         config.launch.game_args = self._game_args.text().split()
 

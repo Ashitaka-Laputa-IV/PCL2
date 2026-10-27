@@ -43,6 +43,7 @@ class LaunchOptions:
     fullscreen: bool = False
     auto_java: bool = True
     minimize_on_launch: bool = False
+    gpu: str = "auto"  # auto / dedicated / integrated：强制使用独显或集显
     jvm_args: list[str] = field(default_factory=list)
     game_args: list[str] = field(default_factory=list)
     show_log_window: bool = True
@@ -109,6 +110,8 @@ class Config:
         launch.memory_mb = max(MIN_MEMORY_MB, min(MAX_MEMORY_MB, int(launch.memory_mb)))
         launch.window_width = max(320, min(15360, int(launch.window_width)))
         launch.window_height = max(240, min(8640, int(launch.window_height)))
+        if launch.gpu not in ("auto", "dedicated", "integrated"):
+            launch.gpu = "auto"
 
         download = self.download
         download.concurrency = max(1, min(64, int(download.concurrency)))

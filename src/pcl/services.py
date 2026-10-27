@@ -15,6 +15,7 @@ from pcl.core.logging import get_logger
 from pcl.core.paths import AppPaths, default_data_root
 from pcl.launch.args import build_plan
 from pcl.launch.auth import Account, AccountStore
+from pcl.launch.gpu import apply_gpu
 from pcl.launch.java import JavaRuntime, scan_java, select_java
 from pcl.launch.java_installer import managed_candidates
 from pcl.launch.runner import GameRunner
@@ -249,6 +250,7 @@ class AppContext:
             version_doc=version_doc,
             extra_game_args=extra_args,
         )
+        plan.env.update(apply_gpu(self.config.launch.gpu, Path(str(java.path))))
         runner = GameRunner(self.paths, plan, version_doc=version_doc)
         runner.start()
 
