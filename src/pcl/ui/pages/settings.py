@@ -246,6 +246,10 @@ class SettingsPage(BasePage):
         self._mirror.setMinimumWidth(320)
         card.add(self._row("镜像地址", "BMCLAPI 或其他兼容镜像的根地址", self._mirror))
 
+        speed_test = AnimatedButton("测速", card, variant="secondary", height=30)
+        speed_test.clicked.connect(self._open_speed_test)
+        card.add(self._row("下载源测速", "比较官方源与镜像源的延迟和速度", speed_test))
+
         self._retry = QSpinBox(card)
         self._retry.setRange(0, 10)
         card.add(self._row("重试次数", "单个文件在每个候选地址上的重试次数", self._retry))
@@ -271,6 +275,9 @@ class SettingsPage(BasePage):
         self._curseforge.setPlaceholderText("导入 CurseForge 整合包时用于获取下载地址")
         self._curseforge.setMinimumWidth(300)
         card.add(self._row("CurseForge API Key", "留空则导入时跳过自动下载并提示手动安装", self._curseforge))
+
+        self._auto_crash = ToggleSwitch(card)
+        card.add(self._row("自动分析崩溃", "游戏异常退出后自动读取 crash-reports 并给出原因", self._auto_crash))
 
         self._log_lines = QSpinBox(card)
         self._log_lines.setRange(500, 50000)
@@ -307,6 +314,7 @@ class SettingsPage(BasePage):
         self._game_root.setText(config.advanced.game_root)
         self._curseforge.setText(config.advanced.curseforge_api_key)
         self._log_lines.setValue(config.advanced.max_log_lines)
+        self._auto_crash.setChecked(config.advanced.auto_analyze_crash)
 
         for widget in (
             self._memory,
@@ -326,7 +334,7 @@ class SettingsPage(BasePage):
             signal = getattr(widget, "valueChanged", None) or getattr(widget, "textChanged", None)
             if signal is not None:
                 signal.connect(self._schedule_save)
-        for widget in (self._fullscreen, self._animations, self._dark):
+        for widget in (self._fullscreen, self._animations, self._dark, self._auto_crash):
             widget.toggled.connect(self._schedule_save)
         for widget in (self._source, self._java_combo):
             widget.currentIndexChanged.connect(self._schedule_save)
@@ -340,6 +348,11 @@ class SettingsPage(BasePage):
         index = self._java_combo.findData(selected) if selected else 0
         self._java_combo.setCurrentIndex(max(0, index))
         self._java_combo.blockSignals(False)
+
+    def _open_speed_test(self) -> None:
+        from pcl.ui.dialogs.speed_test import SpeedTestDialog
+
+        SpeedTestDialog(self.context, self.tasks, self).exec()
 
     def _open_java_install(self) -> None:
         from pcl.ui.dialogs.java_install import JavaInstallDialog
@@ -393,6 +406,7 @@ class SettingsPage(BasePage):
         config.advanced.game_root = self._game_root.text().strip()
         config.advanced.curseforge_api_key = self._curseforge.text().strip()
         config.advanced.max_log_lines = self._log_lines.value()
+        config.advanced.auto_analyze_crash = self._auto_crash.isChecked()
 
         self.context.save_config()
         self._apply_theme()

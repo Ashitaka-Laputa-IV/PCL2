@@ -77,6 +77,7 @@ class AdvancedOptions:
     game_root: str = ""  # 为空表示使用数据根目录下的 .minecraft
     max_log_lines: int = 5000
     curseforge_api_key: str = ""
+    auto_analyze_crash: bool = True
     keep_old_logs: bool = True
 
 

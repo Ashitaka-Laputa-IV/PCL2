@@ -21,6 +21,7 @@ from pcl.core.errors import friendly_message
 from pcl.core.logging import get_logger
 from pcl.services import AppContext
 from pcl.ui import icons, theme
+from pcl.ui.dialogs.crash_report import show_crash_report
 from pcl.ui.dialogs.log_viewer import LogWindow
 from pcl.ui.pages.base import BasePage
 from pcl.ui.pages.content import ContentPage
@@ -342,8 +343,22 @@ class MainWindow(QMainWindow):
         if page is not None:
             page.on_game_state(state)
         running = bool(getattr(state, "running", False))
-        if not running and self.context.config.launch.show_log_window:
-            pass
+        code = getattr(state, "exit_code", None)
+        if running or code in (None, 0):
+            return
+        if not self.context.config.advanced.auto_analyze_crash:
+            return
+        self.tasks.submit(
+            self.context.crash_report,
+            None,
+            on_done=self._on_crash_analyzed,
+            on_error=lambda message: log.warning("崩溃分析失败：%s", message),
+        )
+
+    def _on_crash_analyzed(self, report) -> None:
+        if report is None or not report.reasons:
+            return
+        show_crash_report(self, report)
 
     # ---------- 关闭 ----------
     def closeEvent(self, event) -> None:  # noqa: N802
