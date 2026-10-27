@@ -155,12 +155,15 @@ class SettingsPage(BasePage):
         self._java_combo.setMinimumWidth(260)
         refresh = AnimatedButton("重新检测", card, variant="secondary", height=30)
         refresh.clicked.connect(self._refresh_java)
+        installer = AnimatedButton("一键安装", card, variant="primary", height=30)
+        installer.clicked.connect(self._open_java_install)
         java_row = QWidget(card)
         java_layout = QHBoxLayout(java_row)
         java_layout.setContentsMargins(0, 0, 0, 0)
         java_layout.setSpacing(8)
         java_layout.addWidget(self._java_combo)
         java_layout.addWidget(refresh)
+        java_layout.addWidget(installer)
         card.add(self._row("Java 运行时", "留空或选择「自动检测」由启动器按版本要求挑选", java_row))
 
         self._memory = QSpinBox(card)
@@ -337,6 +340,14 @@ class SettingsPage(BasePage):
         index = self._java_combo.findData(selected) if selected else 0
         self._java_combo.setCurrentIndex(max(0, index))
         self._java_combo.blockSignals(False)
+
+    def _open_java_install(self) -> None:
+        from pcl.ui.dialogs.java_install import JavaInstallDialog
+
+        dialog = JavaInstallDialog(self.context, self.tasks, self.bridge, self)
+        if dialog.exec() == dialog.DialogCode.Accepted and dialog.runtime is not None:
+            self._refresh_java_combo(str(dialog.runtime.path))
+            self._schedule_save()
 
     def _refresh_java(self) -> None:
         runtimes = self.context.refresh_java()

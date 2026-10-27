@@ -489,6 +489,11 @@ class HomePage(BasePage):
                 self._dial.button.set_loading(False, "")
                 self._dial.button.setEnabled(True)
             show_toast(self, message, "error")
+            if "Java" in message:
+                from pcl.ui.dialogs.java_install import JavaInstallDialog
+                dialog = JavaInstallDialog(self.context, self.tasks, self.bridge, self)
+                if dialog.exec() == dialog.DialogCode.Accepted and dialog.runtime is not None:
+                    self._refresh_java_tag()
 
         self.tasks.submit(self.context.launch, instance, on_done=done, on_error=failed)
 
