@@ -238,6 +238,8 @@ class InstancesPage(BasePage):
 
     def _rebuild(self) -> None:
         for card in self._cards:
+            # 先脱离父级，避免 deleteLater 生效前旧卡片与新卡片叠在一起
+            card.setParent(None)
             card.deleteLater()
         self._cards.clear()
 

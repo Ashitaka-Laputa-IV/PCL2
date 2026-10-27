@@ -440,6 +440,7 @@ class InstanceDetailPage(BasePage):
             item = self._info_grid.takeAt(0)
             widget = item.widget()
             if widget is not None:
+                widget.setParent(None)
                 widget.deleteLater()
 
         game_dir = instance.game_dir(self.context.paths)
@@ -551,6 +552,7 @@ class InstanceDetailPage(BasePage):
             item = layout.takeAt(0)
             child = item.widget()
             if child is not None:
+                child.setParent(None)
                 child.deleteLater()
 
         manager = ContentManager(self.context.paths, instance)
@@ -796,6 +798,7 @@ class InstanceDetailPage(BasePage):
             item = self._worlds_list.takeAt(0)
             widget = item.widget()
             if widget is not None:
+                widget.setParent(None)
                 widget.deleteLater()
 
         instance = self.instance
@@ -890,6 +893,7 @@ class InstanceDetailPage(BasePage):
             item = self._server_list_layout.takeAt(0)
             widget = item.widget()
             if widget is not None:
+                widget.setParent(None)
                 widget.deleteLater()
 
         server_list = self._server_list()
