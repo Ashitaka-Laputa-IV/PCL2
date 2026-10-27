@@ -192,12 +192,13 @@ def import_modpack(
         version.name = store.unique_name(name)
         store.save(version)
 
-    # 整合包自带 Mod / 配置，使用版本独立的游戏目录
-    game_dir = paths.version_dir(version.id) / ".minecraft"
+    # 整合包自带 Mod / 配置：写入该版本自己的隔离目录，不与其它版本混用
+    version.isolated = True
+    version.game_root = ""
+    store.save(version)
+    store.prepare_game_dir(version)
+    game_dir = version.game_dir(paths)
     game_dir.mkdir(parents=True, exist_ok=True)
-    if version.game_root != str(game_dir):
-        version.game_root = str(game_dir)
-        store.save(version)
 
     _apply_overrides(parsed, game_dir)
     downloaded, failures = _install_game_files(parsed, game_dir, options)

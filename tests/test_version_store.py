@@ -67,6 +67,49 @@ def test_describe_loader(paths) -> None:
     assert version.loader_version == "47.2.0"
 
 
+def test_new_version_is_isolated(paths) -> None:
+    _write_version(paths.game, "1.20.1", {"id": "1.20.1"})
+    store = VersionStore(paths)
+    version = store.list_versions()[0]
+
+    assert version.isolated is True
+    assert version.game_dir(paths) == paths.version_dir("1.20.1")
+    for name in ("mods", "resourcepacks", "shaderpacks", "saves", "config"):
+        assert (paths.version_dir("1.20.1") / name).is_dir()
+
+
+def test_upgrade_isolation_moves_shared_content(paths) -> None:
+    _write_version(paths.game, "1.20.1", {"id": "1.20.1"})
+    _write_version(paths.game, "1.21.5", {"id": "1.21.5"})
+    # 模拟旧版本写下的 pcl.json：没有 isolated 字段，使用共享目录
+    (paths.version_meta("1.20.1")).write_text(
+        json.dumps({"id": "1.20.1", "name": "旧 1.20.1", "last_played_at": 10}), encoding="utf-8"
+    )
+    (paths.version_meta("1.21.5")).write_text(
+        json.dumps({"id": "1.21.5", "name": "旧 1.21.5", "last_played_at": 30}), encoding="utf-8"
+    )
+    shared_save = paths.game / "saves" / "world" / "level.dat"
+    shared_save.parent.mkdir(parents=True, exist_ok=True)
+    shared_save.write_bytes(b"level")
+    (paths.game / "options.txt").write_text("guiScale:2", encoding="utf-8")
+
+    store = VersionStore(paths)
+    upgraded = store.upgrade_isolation()
+    assert {item.id for item in upgraded} == {"1.20.1", "1.21.5"}
+
+    # 共享内容进入最近游玩的那个版本，另一个从空目录开始
+    target = paths.version_dir("1.21.5")
+    assert (target / "saves" / "world" / "level.dat").is_file()
+    assert (target / "options.txt").is_file()
+    assert not (paths.game / "saves" / "world" / "level.dat").exists()
+    assert (paths.version_dir("1.20.1") / "saves").is_dir()
+    assert not any((paths.version_dir("1.20.1") / "saves").iterdir())
+
+    assert all(item.isolated for item in store.list_versions())
+    # 只升级一次
+    assert store.upgrade_isolation() == []
+
+
 def test_rename_keeps_unique_names(paths) -> None:
     _write_version(paths.game, "1.20.1", {"id": "1.20.1"})
     _write_version(paths.game, "1.20.1-1", {"id": "1.20.1-1", "inheritsFrom": "1.20.1"}, jar=False)

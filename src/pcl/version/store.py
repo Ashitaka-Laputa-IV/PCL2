@@ -23,6 +23,9 @@ log = get_logger(__name__)
 
 META_NAME = "pcl.json"
 
+#: 版本隔离时预先创建的目录（存档、Mod、资源包、光影与配置）
+ISOLATED_DIRS = ("mods", "resourcepacks", "shaderpacks", "saves", "config")
+
 
 class VersionStore:
     """版本仓库：以 ``versions/<id>/<id>.json`` 判定已安装，以 ``pcl.json`` 存设置。"""
@@ -77,6 +80,7 @@ class VersionStore:
                 loader_version=loader_version,
             )
             self.save(version)
+            self._prepare_game_dir(version)
             taken.add(version.name)
             result.append(version)
 
@@ -128,7 +132,24 @@ class VersionStore:
             loader=loader,
             loader_version=loader_version,
         )
-        return self.save(version)
+        self.save(version)
+        self._prepare_game_dir(version)
+        return version
+
+    def prepare_game_dir(self, version: LocalVersion) -> None:
+        """为隔离版本创建存档与内容目录。"""
+        self._prepare_game_dir(version)
+
+    def _prepare_game_dir(self, version: LocalVersion) -> None:
+        game_dir = version.game_dir(self.paths)
+        if game_dir == self.paths.game:
+            return
+        for name in ISOLATED_DIRS:
+            try:
+                (game_dir / name).mkdir(parents=True, exist_ok=True)
+            except OSError as error:
+                log.warning("创建版本目录失败 %s: %s", game_dir / name, error)
+                return
 
     def adopt(self, version_id: str) -> LocalVersion:
         """安装完成后登记版本；若该版本已有条目，则派生一个 ``-1`` 副本。"""
@@ -156,6 +177,7 @@ class VersionStore:
             play_count=0,
         )
         self.save(clone)
+        self._prepare_game_dir(clone)
         log.info("已派生版本 %s -> %s", source.id, new_id)
         return clone
 
@@ -248,6 +270,68 @@ class VersionStore:
             log.warning("版本设置无法解析 %s: %s", path, error)
             return None
 
+    # ---------- 升级：为旧条目开启版本隔离 ----------
+    def upgrade_isolation(self) -> list[LocalVersion]:
+        """把没有 ``isolated`` 字段的旧条目升级为默认隔离。
+
+        共享 ``.minecraft`` 里已有的存档 / Mod 会挪进最近游玩的那个版本，
+        避免升级后“存档消失”，其余版本从空目录开始。
+        """
+        legacy: list[str] = []
+        for version_id in self.installed_ids():
+            path = self.meta_path(version_id)
+            if not path.is_file():
+                continue
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if isinstance(data, dict) and "isolated" not in data:
+                legacy.append(version_id)
+        if not legacy:
+            return []
+
+        versions = {item.id: item for item in self.list_versions()}
+        upgraded: list[LocalVersion] = []
+        for version_id in legacy:
+            version = versions.get(version_id)
+            if version is None or version.game_root:
+                continue
+            version.isolated = True
+            self.save(version)
+            upgraded.append(version)
+
+        if upgraded:
+            target = max(upgraded, key=lambda item: item.last_played_at)
+            self._adopt_shared_content(target)
+            for version in upgraded:
+                self._prepare_game_dir(version)
+            log.info("已为 %d 个旧版本开启版本隔离（共享文件并入 %s）", len(upgraded), target.name)
+        return upgraded
+
+    def _adopt_shared_content(self, version: LocalVersion) -> None:
+        """把共享 .minecraft 的存档等内容移入目标版本目录（仅此一次）。"""
+        shared = self.paths.game
+        target = version.game_dir(self.paths)
+        if target == shared:
+            return
+        try:
+            for name in (*ISOLATED_DIRS, "options.txt"):
+                source = shared / name
+                if not source.exists():
+                    continue
+                destination = target / name
+                if destination.is_dir():
+                    if any(destination.iterdir()):
+                        continue
+                elif destination.exists():
+                    continue
+                target.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(source), str(destination))
+                log.info("已把共享目录的 %s 移入版本 %s", name, version.id)
+        except OSError as error:
+            log.warning("迁移共享游戏文件失败：%s", error)
+
     # ---------- 名称 ----------
     @staticmethod
     def _unique_name(base: str, taken: Iterable[str]) -> str:
@@ -319,6 +403,8 @@ class VersionStore:
                 game_root = str(directory / ".minecraft")
             elif data.get("game_root"):
                 game_root = str(data["game_root"])
+            # 旧实例没有隔离的继续用共享目录，避免升级后看不到原有存档
+            isolated = bool(game_root)
             settings = self._legacy_settings(data)
             mc_version, loader, loader_version = self.describe(version_id)
             base = default_name(mc_version, loader, loader_version)
@@ -338,6 +424,7 @@ class VersionStore:
                 # 同一版本的第二个及以后的旧实例：派生副本，保留各自的隔离目录
                 target = self.duplicate(version_id)
                 target.game_root = game_root
+                target.isolated = isolated
                 for key, value in settings.items():
                     setattr(target, key, value)
                 if legacy_name:
@@ -349,6 +436,10 @@ class VersionStore:
                 migrated.append(target)
             else:
                 changed = self._merge_legacy(target, settings, game_root)
+                if not target.game_root and target.isolated != isolated:
+                    # 旧实例用的是共享目录：不要凭空把它变成隔离版本
+                    target.isolated = isolated
+                    changed = True
                 if legacy_name and target.name != legacy_name:
                     # 自动生成的默认名（含迁移中断留下的 -N 后缀）允许改回用户起的名字
                     if target.name == base or target.name.startswith(f"{base}-"):

@@ -268,6 +268,20 @@ class VersionDetailPage(BasePage):
         self._server_edit.setPlaceholderText("例如 play.example.com:25565")
         self._server_edit.setMinimumWidth(320)
         base.add(self._row("启动后进入服务器", self._server_edit))
+
+        isolation = QWidget(base)
+        isolation_layout = QHBoxLayout(isolation)
+        isolation_layout.setContentsMargins(0, 0, 0, 0)
+        isolation_layout.setSpacing(10)
+        self._isolated = ToggleSwitch(isolation)
+        self._isolated.setToolTip("开启后存档、Mod、资源包与配置都保存在该版本目录内")
+        self._isolated.toggled.connect(self._update_isolation_hint)
+        self._game_dir_label = QLabel("", isolation)
+        self._game_dir_label.setObjectName("Muted")
+        self._game_dir_label.setWordWrap(True)
+        isolation_layout.addWidget(self._isolated)
+        isolation_layout.addWidget(self._game_dir_label, 1)
+        base.add(self._row("版本隔离", isolation))
         layout.addWidget(base)
 
         advance = Card(content, padding=20, spacing=10)
@@ -503,6 +517,18 @@ class VersionDetailPage(BasePage):
         self._jvm_args.setText(" ".join(version.jvm_args))
         self._game_args.setText(" ".join(version.game_args))
         self._notes.setText(version.notes)
+        self._isolated.setChecked(version.isolated)
+        self._update_isolation_hint(version.isolated)
+
+    def _update_isolation_hint(self, checked: bool) -> None:
+        version = self.version
+        if version is None:
+            return
+        if checked:
+            path = Path(version.game_root) if version.game_root else self.context.paths.version_dir(version.id)
+            self._game_dir_label.setText(f"游戏目录：{path}")
+        else:
+            self._game_dir_label.setText(f"游戏目录：{self.context.paths.game}（与其它版本共享）")
 
     def _save_settings(self) -> None:
         version = self.version
@@ -516,11 +542,18 @@ class VersionDetailPage(BasePage):
         version.jvm_args = self._jvm_args.text().split()
         version.game_args = self._game_args.text().split()
         version.notes = self._notes.text().strip()
+        wanted_isolated = self._isolated.isChecked()
+        if wanted_isolated != version.isolated:
+            # 切换隔离时回到版本目录 / 共享 .minecraft，不再沿用自定义目录
+            version.isolated = wanted_isolated
+            version.game_root = ""
         try:
             self.context.versions.save(version)
+            self.context.versions.prepare_game_dir(version)
         except Exception as error:
             show_toast(self, friendly_message(error), "error")
             return
+        self._update_isolation_hint(version.isolated)
         self._load_overview()
         self._refresh_header()
         show_toast(self, "版本设置已保存", "success")

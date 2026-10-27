@@ -160,7 +160,7 @@ class VersionsPage(BasePage):
     """版本列表页。"""
 
     title = "版本管理"
-    subtitle = "已安装的游戏版本，安装后自动出现在这里"
+    subtitle = "已安装的游戏版本；默认版本隔离，存档与 Mod 各自独立"
 
     def __init__(self, context: AppContext, bridge, tasks, parent: QWidget | None = None) -> None:
         super().__init__(context, bridge, tasks, parent)

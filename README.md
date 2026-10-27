@@ -9,7 +9,7 @@
 | 模块 | 已实现能力 |
 | --- | --- |
 | 版本下载安装 | 官方版本清单（正式版 / 快照 / 远古版）、客户端 jar、依赖库、资源索引与资源对象；`sha1` + `size` 双校验、断点续传、原子落盘；支持 Forge / NeoForge / Fabric / Quilt 合成可启动版本 |
-| 版本管理 | 以 `versions/` 为唯一列表：安装完成即出现，可启动 / 复制 / 重命名 / 删除、导出整合包；重名自动加 `-1` / `-2`；同一版本重复安装会派生共享游戏文件的副本；支持把整合包、Mod、资源包直接拖入窗口安装 |
+| 版本管理 | 以 `versions/` 为唯一列表：安装完成即出现，可启动 / 复制 / 重命名 / 删除、导出整合包；默认版本隔离（存档 / Mod / 配置放在 `versions/<id>`，可在详情页关闭）；重名自动加 `-1` / `-2`；同一版本重复安装会派生副本；支持把整合包、Mod、资源包直接拖入窗口安装 |
 | 一键装 Java | Adoptium Temurin JRE 自动下载解压到启动器目录，可指定 8/11/17/21/25 |
 | 离线启动 | 启动前自动检查版本文件是否完整，缺失时引导前往下载；支持「启动后最小化启动器」（游戏退出自动恢复）；仅离线登录（离线 UUID 与 Java 版 `UUID.nameUUIDFromBytes` 完全一致）、Java 自动扫描与按版本挑选、内存 / 窗口 / JVM / 游戏参数、`natives` 解压、实时日志与结束进程 |
 | 资源管理 | Mod（`fabric.mod.json` / `META-INF/mods.toml` / `mcmod.info`）、资源包（`pack.mcmeta`）、光影（`shaders/`）扫描；`.disabled` 启停 / 批量启停与删除；拖入安装；基于元数据的依赖缺失 / 重复 / 版本不匹配检查；Modrinth 指纹比对显示可更新版本并一键替换 |
@@ -50,7 +50,9 @@ QT_QPA_PLATFORM=offscreen uv run pytest -m gui
 ├── .minecraft/                  # 游戏文件
 │   ├── versions/<id>/
 │   │   ├── <id>.json            # 版本描述
-│   │   └── pcl.json             # 该版本的启动器设置（Java / 内存 / 图标…）
+│   │   ├── pcl.json             # 该版本的启动器设置（Java / 内存 / 图标…）
+│   │   ├── saves/ mods/ config/ # 版本隔离：存档与内容各自独立
+│   │   └── …
 │   ├── libraries/
 │   └── assets/
 ├── instances/                   # 旧版实例目录，仅用于启动时迁移

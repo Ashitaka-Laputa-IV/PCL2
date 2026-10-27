@@ -46,7 +46,8 @@ class LocalVersion:
     mc_version: str
     loader: str = "vanilla"
     loader_version: str = ""
-    game_root: str = ""  # 非空表示使用独立游戏目录（版本隔离 / 旧数据迁移）
+    isolated: bool = True  # 版本隔离：存档/Mod/配置放在 versions/<id> 内
+    game_root: str = ""  # 非空表示使用外部游戏目录（迁移的旧实例 / 手动指定）
     java_path: str = ""
     memory_mb: int = 0  # 0 表示跟随全局设置
     window_width: int = 0
@@ -63,9 +64,15 @@ class LocalVersion:
 
     # ---------- 路径 ----------
     def game_dir(self, paths: AppPaths) -> Path:
-        """返回该版本使用的游戏目录（默认与其它版本共用 .minecraft）。"""
+        """返回该版本使用的游戏目录。
+
+        默认开启版本隔离：存档、Mod、资源包与配置都放在 ``versions/<id>`` 里，
+        不同版本互不影响；``isolated`` 关闭时才回落到共享的 ``.minecraft``。
+        """
         if self.game_root:
             return Path(self.game_root).expanduser()
+        if self.isolated:
+            return paths.version_dir(self.id)
         return paths.game
 
     @property
@@ -87,6 +94,7 @@ class LocalVersion:
             "mc_version": self.mc_version,
             "loader": self.loader,
             "loader_version": self.loader_version,
+            "isolated": self.isolated,
             "game_root": self.game_root,
             "java_path": self.java_path,
             "memory_mb": self.memory_mb,
@@ -125,6 +133,8 @@ class LocalVersion:
             mc_version=str(data.get("mc_version", "")),
             loader=str(data.get("loader", "vanilla")),
             loader_version=str(data.get("loader_version", "")),
+            # 旧条目没有该字段：保持共享目录，避免升级后存档「消失」
+            isolated=bool(data.get("isolated", False)),
             game_root=str(data.get("game_root", "")),
             java_path=str(data.get("java_path", "")),
             memory_mb=_int(data.get("memory_mb", 0)),
