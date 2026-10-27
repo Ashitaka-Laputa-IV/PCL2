@@ -98,6 +98,12 @@ def test_content_manager_toggle_and_delete(paths, tmp_path) -> None:
     assert enabled.name == "demo.jar"
     assert manager.mods()[0].enabled is True
 
+    assert ContentManager.set_enabled(enabled, True) == enabled
+    renamed = ContentManager.set_enabled(enabled, False)
+    assert renamed.name.endswith(".disabled")
+    assert ContentManager.set_enabled(renamed, False) == renamed
+    assert ContentManager.set_enabled(renamed, True).name == "demo.jar"
+
     target = manager.install_files([make_fabric_mod(tmp_path / "other.jar")])
     assert target[0].parent == mods_dir
     ContentManager.delete(target[0])

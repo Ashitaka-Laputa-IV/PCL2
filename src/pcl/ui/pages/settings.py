@@ -17,8 +17,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from pcl.core.config import ACCENT_COLORS
+from pcl.core.config import ACCENT_COLORS, load_config, save_config
 from pcl.services import AppContext
+from pcl.ui.dialogs.confirm import confirm
 from pcl.ui.pages.base import BasePage
 from pcl.ui.widgets.animated_button import AnimatedButton
 from pcl.ui.widgets.card import Card
@@ -284,6 +285,18 @@ class SettingsPage(BasePage):
         self._log_lines.setSingleStep(500)
         card.add(self._row("日志缓冲行数", "日志窗口保留的最大行数", self._log_lines))
 
+        backup = QWidget(card)
+        backup_layout = QHBoxLayout(backup)
+        backup_layout.setContentsMargins(0, 0, 0, 0)
+        backup_layout.setSpacing(8)
+        export = AnimatedButton("导出配置…", backup, variant="secondary", height=30)
+        export.clicked.connect(self._export_config)
+        import_button = AnimatedButton("导入配置…", backup, variant="secondary", height=30)
+        import_button.clicked.connect(self._import_config)
+        backup_layout.addWidget(export)
+        backup_layout.addWidget(import_button)
+        card.add(self._row("配置备份", "把 config.json 复制到任意位置，或从备份恢复全部设置", backup))
+
         clear = AnimatedButton("清理下载缓存", card, variant="danger", height=30)
         clear.clicked.connect(self._clear_cache)
         card.add(self._row("缓存", "删除未完成的下载与版本清单缓存", clear))
@@ -421,6 +434,37 @@ class SettingsPage(BasePage):
         path = QFileDialog.getExistingDirectory(self, "选择共享游戏目录", str(Path.home()))
         if path:
             self._game_root.setText(path)
+
+    def _export_config(self) -> None:
+        target, _filter = QFileDialog.getSaveFileName(
+            self, "导出配置", str(Path.home() / "pcl2-config.json"), "JSON (*.json)"
+        )
+        if not target:
+            return
+        try:
+            save_config(self.context.config, Path(target))
+        except OSError as error:
+            show_toast(self, f"导出失败：{error}", "error")
+            return
+        show_toast(self, "配置已导出", "success")
+
+    def _import_config(self) -> None:
+        source, _filter = QFileDialog.getOpenFileName(self, "导入配置", str(Path.home()), "JSON (*.json)")
+        if not source:
+            return
+        try:
+            config = load_config(Path(source))
+        except Exception as error:  # noqa: BLE001 - 损坏的备份直接提示
+            show_toast(self, f"配置文件无法读取：{error}", "error")
+            return
+        if not confirm(self, "导入配置", "导入后将覆盖当前全部设置并立即生效，是否继续？", ok_text="导入"):
+            return
+        self.context.config = config
+        self.context.save_config()
+        self._load()
+        self._apply_theme()
+        self._status.setText("已导入配置")
+        show_toast(self, "配置已导入", "success")
 
     def _clear_cache(self) -> None:
         cache = self.context.paths.cache

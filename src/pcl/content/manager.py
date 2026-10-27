@@ -63,6 +63,14 @@ class ContentManager:
         path.rename(target)
         return target
 
+    @staticmethod
+    def set_enabled(path: Path, enabled: bool) -> Path:
+        """把文件调整到指定启用状态，已满足时直接返回。"""
+        is_enabled = not path.name.endswith(DISABLED_SUFFIX)
+        if is_enabled == enabled:
+            return path
+        return ContentManager.toggle(path)
+
     # ---------- 删除 ----------
     @staticmethod
     def delete(path: Path) -> None:

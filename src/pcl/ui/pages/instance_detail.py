@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 
 from pcl.content.conflict import check_conflicts
 from pcl.content.manager import ContentManager
+from pcl.content.updates import ModUpdate, check_mod_updates, download_update
 from pcl.core.errors import friendly_message
 from pcl.instance.model import Instance
 from pcl.instance.saves import WorldInfo, backup_world, delete_world, scan_worlds
@@ -78,6 +79,8 @@ class InstanceDetailPage(BasePage):
     # ---------- 构建 ----------
     def _build(self) -> None:
         self._content_ui: dict[str, tuple[QLabel, QVBoxLayout]] = {}
+        self._content_tools: dict[str, QWidget] = {}
+        self._updates: dict[str, ModUpdate] = {}
         outer = QVBoxLayout(self)
         outer.setContentsMargins(28, 20, 24, 16)
         outer.setSpacing(12)
@@ -308,6 +311,25 @@ class InstanceDetailPage(BasePage):
         banner.setStyleSheet("color: #B45309;")
         layout.addWidget(banner)
 
+        tools = QWidget(page)
+        tool_row = QHBoxLayout(tools)
+        tool_row.setContentsMargins(0, 0, 0, 0)
+        tool_row.setSpacing(8)
+        if kind == "mods":
+            check = AnimatedButton("检查更新", tools, variant="secondary", height=28)
+            check.clicked.connect(lambda _=False, button=check: self._check_updates(button))
+            tool_row.addWidget(check)
+        enable_all = AnimatedButton("全部启用", tools, variant="ghost", height=28)
+        enable_all.clicked.connect(lambda: self._set_all_enabled(kind, True))
+        tool_row.addWidget(enable_all)
+        disable_all = AnimatedButton("全部禁用", tools, variant="ghost", height=28)
+        disable_all.clicked.connect(lambda: self._set_all_enabled(kind, False))
+        tool_row.addWidget(disable_all)
+        tool_row.addStretch(1)
+        tools.setVisible(False)
+        layout.addWidget(tools)
+        self._content_tools[kind] = tools
+
         scroll = QScrollArea(page)
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
@@ -533,6 +555,9 @@ class InstanceDetailPage(BasePage):
             items = manager.shaderpacks()
             banner.setVisible(False)
 
+        tools = self._content_tools.get(kind)
+        if tools is not None:
+            tools.setVisible(bool(items))
         if not items:
             layout.insertWidget(
                 layout.count() - 1,
@@ -578,6 +603,13 @@ class InstanceDetailPage(BasePage):
         texts.addWidget(meta)
         line.addLayout(texts, 1)
 
+        update = self._updates.get(str(item.path))
+        if update is not None:
+            bump = AnimatedButton(f"↑ 更新 {update.latest_version}", row, variant="secondary", height=28)
+            bump.setToolTip(f"Modrinth 最新版本 {update.latest_version}，点击下载并替换")
+            bump.clicked.connect(lambda _=False, target=update: self._apply_update(target))
+            line.addWidget(bump)
+
         switch = ToggleSwitch(row)
         switch.setChecked(bool(item.enabled))
         switch.toggled.connect(lambda checked, target=item: self._toggle_content(target))
@@ -609,6 +641,93 @@ class InstanceDetailPage(BasePage):
             show_toast(self, friendly_message(error), "error")
             return
         self._reload_content_all()
+
+    def _set_all_enabled(self, kind: str, enabled: bool) -> None:
+        instance = self.instance
+        if instance is None:
+            return
+        manager = ContentManager(self.context.paths, instance)
+        if kind == "mods":
+            items = manager.mods()
+        elif kind == "resourcepacks":
+            items = manager.resourcepacks()
+        else:
+            items = manager.shaderpacks()
+        changed = 0
+        failed = 0
+        for item in items:
+            try:
+                ContentManager.set_enabled(item.path, enabled)
+                changed += 1
+            except Exception:
+                failed += 1
+        self._updates.clear()
+        self._reload_content_all()
+        text = f"已{'启用' if enabled else '禁用'} {changed} 项"
+        if failed:
+            text += f"，{failed} 项失败"
+        show_toast(self, text, "success" if not failed else "error")
+
+    def _check_updates(self, button) -> None:
+        instance = self.instance
+        if instance is None:
+            return
+        manager = ContentManager(self.context.paths, instance)
+        mods = [item for item in manager.mods() if item.enabled]
+        if not mods:
+            show_toast(self, "当前实例没有启用的 Mod", "error")
+            return
+        button.set_loading(True, "检查中…")
+
+        def done(report) -> None:
+            button.set_loading(False, "检查更新")
+            self._updates = {str(update.path): update for update in report.updates}
+            self._reload_content_all()
+            if report.error:
+                show_toast(self, f"检查失败：{report.error}", "error")
+            elif report.updates:
+                show_toast(self, f"发现 {len(report.updates)} 个可更新 Mod", "success")
+            else:
+                show_toast(self, f"已检查 {report.checked} 个 Mod，均为最新", "success")
+
+        def failed(message: str) -> None:
+            button.set_loading(False, "检查更新")
+            show_toast(self, message, "error")
+
+        self.tasks.submit(
+            check_mod_updates,
+            mods,
+            self.context.client(),
+            mc_version=instance.mc_version,
+            loader=instance.loader,
+            on_done=done,
+            on_error=failed,
+        )
+
+    def _apply_update(self, update: ModUpdate) -> None:
+        dest = update.path.parent / update.latest_filename
+
+        def done(_path) -> None:
+            if str(dest) != str(update.path) and update.path.exists():
+                try:
+                    ContentManager.set_enabled(update.path, False)
+                except Exception:
+                    pass
+            self._updates.pop(str(update.path), None)
+            show_toast(self, f"{update.file_name} 已更新到 {update.latest_version}", "success")
+            self._reload_content_all()
+
+        def failed(message: str) -> None:
+            show_toast(self, message, "error")
+
+        self.tasks.submit(
+            download_update,
+            self.context.client(),
+            update,
+            dest,
+            on_done=done,
+            on_error=failed,
+        )
 
     def _open_content_dir(self, kind: str) -> None:
         instance = self.instance

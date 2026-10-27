@@ -9,6 +9,7 @@ from pathlib import Path
 from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFileDialog,
     QHBoxLayout,
@@ -21,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from pcl.content.conflict import check_conflicts
 from pcl.content.manager import ContentManager
+from pcl.content.updates import ModUpdate, check_mod_updates, download_update
 from pcl.core.errors import friendly_message
 from pcl.services import AppContext
 from pcl.ui import icons
@@ -34,7 +36,7 @@ from pcl.ui.widgets.toast import show_toast
 KIND_TABS = (("mods", "Mod"), ("resourcepacks", "资源包"), ("shaderpacks", "光影"))
 
 
-def _letter_icon(text: str, size: int = 36) -> QPixmap:
+def _letter_icon(text: str, size: int = 36, color: QColor | None = None) -> QPixmap:
     dpr = 2
     pixmap = QPixmap(size * dpr, size * dpr)
     pixmap.fill(Qt.GlobalColor.transparent)
@@ -43,8 +45,8 @@ def _letter_icon(text: str, size: int = 36) -> QPixmap:
     rect = QRectF(0, 0, size * dpr, size * dpr)
     path = QPainterPath()
     path.addRoundedRect(rect.adjusted(0, 0, -1, -1), 8 * dpr, 8 * dpr)
-    painter.fillPath(path, QColor("#E8EEF8"))
-    painter.setPen(QColor("#5F6B7A"))
+    painter.fillPath(path, color or QColor("#E8EEF8"))
+    painter.setPen(QColor("#FFFFFF") if color is not None else QColor("#5F6B7A"))
     font = QFont()
     font.setWeight(QFont.Weight.DemiBold)
     font.setPixelSize(int(size * dpr * 0.52))
@@ -106,6 +108,11 @@ class ContentRow(Card):
         row = QHBoxLayout()
         row.setSpacing(12)
 
+        self._check = QCheckBox(self)
+        self._check.setChecked(page.is_selected(item.path))
+        self._check.toggled.connect(lambda checked: page.update_selection(item.path, checked))
+        row.addWidget(self._check)
+
         icon_label = QLabel(self)
         icon_label.setFixedSize(36, 36)
         if getattr(item, "icon", None):
@@ -113,9 +120,9 @@ class ContentRow(Card):
             if pixmap.loadFromData(item.icon):
                 icon_label.setPixmap(pixmap.scaled(36, 36, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
             else:
-                icon_label.setPixmap(_letter_icon(item.display_name))
+                icon_label.setPixmap(_letter_icon(item.display_name, 36, self.palette().highlight().color()))
         else:
-            icon_label.setPixmap(_letter_icon(item.display_name))
+            icon_label.setPixmap(_letter_icon(item.display_name, 36, self.palette().highlight().color()))
         row.addWidget(icon_label)
 
         texts = QVBoxLayout()
@@ -140,6 +147,13 @@ class ContentRow(Card):
         texts.addWidget(meta)
         row.addLayout(texts, 1)
 
+        update = page.update_for(item.path)
+        if update is not None:
+            bump = AnimatedButton(f"↑ 更新 {update.latest_version}", self, variant="secondary", height=28)
+            bump.setToolTip(f"Modrinth 最新版本 {update.latest_version}，点击下载并替换")
+            bump.clicked.connect(lambda _=False, target=update: page.apply_update(target))
+            row.addWidget(bump)
+
         self._switch = ToggleSwitch(self)
         self._switch.setChecked(bool(item.enabled))
         self._switch.toggled.connect(self._on_toggled)
@@ -157,13 +171,14 @@ class ContentRow(Card):
 
     def _on_toggled(self, checked: bool) -> None:
         try:
-            ContentManager.toggle(self.item.path)
+            new_path = ContentManager.toggle(self.item.path)
         except Exception as error:
             show_toast(self.page, friendly_message(error), "error")
             self._switch.blockSignals(True)
             self._switch.setChecked(not checked)
             self._switch.blockSignals(False)
             return
+        self.page.on_item_toggled(self.item.path, new_path)
         self.page.refresh()
 
     def _on_delete(self) -> None:
@@ -187,6 +202,9 @@ class ContentPage(BasePage):
     def __init__(self, context: AppContext, bridge, tasks, parent: QWidget | None = None) -> None:
         super().__init__(context, bridge, tasks, parent)
         self.setAcceptDrops(True)
+        self._updates: dict[str, ModUpdate] = {}
+        self._selected: set[str] = set()
+        self._items: list = []
         self._build()
 
     def _build(self) -> None:
@@ -200,10 +218,13 @@ class ContentPage(BasePage):
         self._instance_combo.currentIndexChanged.connect(self._on_instance_changed)
         header.addWidget(self._instance_combo)
 
+        self._update_button = AnimatedButton("检查更新", self, variant="secondary")
+        self._update_button.clicked.connect(self._check_updates)
         open_dir = AnimatedButton("打开目录", self, variant="secondary")
         open_dir.clicked.connect(self._open_directory)
         import_button = AnimatedButton("导入文件", self, variant="primary")
         import_button.clicked.connect(self._import_files)
+        header.addWidget(self._update_button)
         header.addWidget(open_dir)
         header.addWidget(import_button)
         outer.addLayout(header)
@@ -214,6 +235,31 @@ class ContentPage(BasePage):
         self._banner.add(self._banner_label)
         self._banner.setVisible(False)
         outer.addWidget(self._banner)
+
+        self._batch_bar = QWidget(self)
+        batch = QHBoxLayout(self._batch_bar)
+        batch.setContentsMargins(0, 0, 0, 0)
+        batch.setSpacing(8)
+        self._batch_label = QLabel("已选 0 项", self._batch_bar)
+        batch.addWidget(self._batch_label)
+        self._select_all_button = AnimatedButton("全选", self._batch_bar, variant="secondary", height=28)
+        self._select_all_button.clicked.connect(self._toggle_select_all)
+        batch.addWidget(self._select_all_button)
+        enable = AnimatedButton("批量启用", self._batch_bar, variant="secondary", height=28)
+        enable.clicked.connect(lambda: self._batch_set_enabled(True))
+        batch.addWidget(enable)
+        disable = AnimatedButton("批量禁用", self._batch_bar, variant="secondary", height=28)
+        disable.clicked.connect(lambda: self._batch_set_enabled(False))
+        batch.addWidget(disable)
+        remove = AnimatedButton("批量删除", self._batch_bar, variant="danger", height=28)
+        remove.clicked.connect(self._batch_delete)
+        batch.addWidget(remove)
+        cancel = AnimatedButton("取消", self._batch_bar, variant="ghost", height=28)
+        cancel.clicked.connect(self._clear_selection)
+        batch.addWidget(cancel)
+        batch.addStretch(1)
+        self._batch_bar.setVisible(False)
+        outer.addWidget(self._batch_bar)
 
         self._tabs = QTabWidget(self)
         self._pages: dict[str, tuple[QScrollArea, QVBoxLayout]] = {}
@@ -230,7 +276,7 @@ class ContentPage(BasePage):
             area.setWidget(content)
             self._tabs.addTab(area, label)
             self._pages[kind] = (area, layout)
-        self._tabs.currentChanged.connect(lambda _index: self.refresh())
+        self._tabs.currentChanged.connect(self._on_tab_changed)
         outer.addWidget(self._tabs, 1)
 
         self._hint = QLabel("提示：可直接把 Mod / 资源包 / 光影文件拖入本页完成安装。", self)
@@ -253,6 +299,7 @@ class ContentPage(BasePage):
         manager = self._manager()
         kind = self._current_kind()
         _area, layout = self._pages[kind]
+        self._items = []
 
         # 清理旧行（保留末尾 stretch）
         while layout.count() > 1:
@@ -281,8 +328,12 @@ class ContentPage(BasePage):
             self._show_empty(layout, "把 Mod / 资源包 / 光影文件拖到这里，或点击右上角「导入文件」。")
             return
 
+        self._items = items
+        existing = {str(item.path) for item in items}
+        self._selected &= existing
         for item in items:
             layout.insertWidget(layout.count() - 1, ContentRow(self, kind, item, self))
+        self._refresh_batch_bar()
         self._hint.setText(f"目录：{manager.directory(kind)}")
 
     def _show_empty(self, layout: QVBoxLayout, text: str) -> None:
@@ -305,6 +356,154 @@ class ContentPage(BasePage):
         self._banner_label.setStyleSheet("color: #B45309;")
         self._banner.setVisible(True)
 
+    def _on_tab_changed(self, _index: int) -> None:
+        self._selected.clear()
+        self.refresh()
+
+    # ---------- 批量选择 ----------
+    def is_selected(self, path: Path) -> bool:
+        return str(path) in self._selected
+
+    def update_selection(self, path: Path, checked: bool) -> None:
+        if checked:
+            self._selected.add(str(path))
+        else:
+            self._selected.discard(str(path))
+        self._refresh_batch_bar()
+
+    def update_for(self, path: Path) -> ModUpdate | None:
+        return self._updates.get(str(path))
+
+    def on_item_toggled(self, old_path: Path, new_path: Path) -> None:
+        self._selected.discard(str(old_path))
+        update = self._updates.pop(str(old_path), None)
+        if update is not None:
+            from dataclasses import replace
+
+            self._updates[str(new_path)] = replace(update, path=new_path)
+
+    def _refresh_batch_bar(self) -> None:
+        count = len(self._selected)
+        total = len(self._items)
+        self._batch_label.setText(f"已选 {count} 项")
+        self._select_all_button.setText("取消全选" if total and count >= total else "全选")
+        self._batch_bar.setVisible(count > 0)
+
+    def _toggle_select_all(self) -> None:
+        keys = {str(item.path) for item in self._items}
+        if keys and self._selected >= keys:
+            self._selected.clear()
+        else:
+            self._selected = keys
+        self.refresh()
+
+    def _clear_selection(self) -> None:
+        self._selected.clear()
+        self.refresh()
+
+    def _batch_set_enabled(self, enabled: bool) -> None:
+        changed = 0
+        failed = 0
+        for key in list(self._selected):
+            try:
+                ContentManager.set_enabled(Path(key), enabled)
+                changed += 1
+            except Exception:
+                failed += 1
+        self._selected.clear()
+        self._updates.clear()
+        self.refresh()
+        text = f"已{'启用' if enabled else '禁用'} {changed} 项"
+        if failed:
+            text += f"，{failed} 项失败"
+        show_toast(self, text, "success" if not failed else "error")
+
+    def _batch_delete(self) -> None:
+        count = len(self._selected)
+        if not count:
+            return
+        if not confirm(self, "批量删除", f"确定删除选中的 {count} 个文件吗？", ok_text="删除", danger=True):
+            return
+        removed = 0
+        failed = 0
+        for key in list(self._selected):
+            try:
+                ContentManager.delete(Path(key))
+                removed += 1
+            except Exception:
+                failed += 1
+        self._selected.clear()
+        self._updates.clear()
+        self.refresh()
+        show_toast(self, f"已删除 {removed} 项" + (f"，{failed} 项失败" if failed else ""), "success" if not failed else "error")
+
+    # ---------- 更新 ----------
+    def _check_updates(self) -> None:
+        manager = self._manager()
+        if manager is None:
+            show_toast(self, "请先选择一个实例", "error")
+            return
+        mods = [item for item in manager.mods() if item.enabled]
+        if not mods:
+            show_toast(self, "当前实例没有启用的 Mod", "error")
+            return
+        self._update_button.set_loading(True, "检查中…")
+
+        def done(report) -> None:
+            self._update_button.set_loading(False, "检查更新")
+            self._updates = {str(update.path): update for update in report.updates}
+            self.refresh()
+            self._hint.setText(
+                f"已检查 {report.checked} 个 Mod · Modrinth 识别 {report.matched} 个 · 可更新 {len(report.updates)} 个"
+            )
+            if report.error:
+                show_toast(self, f"检查失败：{report.error}", "error")
+            elif report.updates:
+                show_toast(self, f"发现 {len(report.updates)} 个可更新 Mod", "success")
+            else:
+                show_toast(self, "所有 Mod 均为最新版本", "success")
+
+        def failed(message: str) -> None:
+            self._update_button.set_loading(False, "检查更新")
+            show_toast(self, message, "error")
+
+        self.tasks.submit(
+            check_mod_updates,
+            mods,
+            self.context.client(),
+            mc_version=manager.instance.mc_version,
+            loader=manager.instance.loader,
+            on_done=done,
+            on_error=failed,
+        )
+
+    def apply_update(self, update: ModUpdate) -> None:
+        dest = update.path.parent / update.latest_filename
+        self._hint.setText(f"正在更新 {update.file_name} → {update.latest_version}…")
+
+        def done(_path) -> None:
+            if str(dest) != str(update.path) and update.path.exists():
+                try:
+                    ContentManager.set_enabled(update.path, False)
+                except Exception:
+                    pass
+            self._updates.pop(str(update.path), None)
+            show_toast(self, f"{update.file_name} 已更新到 {update.latest_version}", "success")
+            self.refresh()
+
+        def failed(message: str) -> None:
+            show_toast(self, message, "error")
+            self._hint.setText(f"更新失败：{message}")
+
+        self.tasks.submit(
+            download_update,
+            self.context.client(),
+            update,
+            dest,
+            on_done=done,
+            on_error=failed,
+        )
+
     def _refresh_choices(self) -> None:
         instances = self.context.instances.list_instances()
         current = self.context.current_instance()
@@ -322,6 +521,8 @@ class ContentPage(BasePage):
         instance_id = self._instance_combo.itemData(index)
         if instance_id:
             self.context.select_instance(str(instance_id))
+            self._selected.clear()
+            self._updates.clear()
             self.refresh()
 
     # ---------- 操作 ----------
