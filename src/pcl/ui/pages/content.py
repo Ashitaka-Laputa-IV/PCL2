@@ -82,8 +82,9 @@ class DropZone(QWidget):
 
         pixmap = icons.pixmap("inbox", accent.name(), 44)
         if not pixmap.isNull():
+            icon = pixmap.deviceIndependentSize()
             painter.drawPixmap(
-                int(rect.center().x() - pixmap.width() / 2),
+                int(rect.center().x() - icon.width() / 2),
                 int(rect.top() + 26),
                 pixmap,
             )

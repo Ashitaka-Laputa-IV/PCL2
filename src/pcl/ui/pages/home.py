@@ -104,20 +104,23 @@ def _avatar_pixmap(text: str, accent: QColor, size: int = 40) -> QPixmap:
 def _badge_pixmap(name: str, accent: QColor, size: int = 40) -> QPixmap:
     dpr = 2
     pixmap = QPixmap(size * dpr, size * dpr)
+    # 先声明 DPR，之后按逻辑像素绘制：否则图标会按设备像素的一半缩小并偏移
+    pixmap.setDevicePixelRatio(dpr)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-    rect = QRectF(0, 0, size * dpr, size * dpr)
+    rect = QRectF(0, 0, size, size)
     path = QPainterPath()
-    path.addRoundedRect(rect, 12 * dpr, 12 * dpr)
+    path.addRoundedRect(rect, 12, 12)
     soft = QColor(accent)
     soft.setAlpha(42)
     painter.fillPath(path, soft)
-    icon = icons.pixmap(name, accent.name(), int(size * 0.54))
+    icon_size = size * 0.54
+    icon = icons.pixmap(name, accent.name(), int(icon_size))
     if not icon.isNull():
-        painter.drawPixmap(int((size * dpr - icon.width()) / 2), int((size * dpr - icon.height()) / 2), icon)
+        target = QRectF((size - icon_size) / 2, (size - icon_size) / 2, icon_size, icon_size)
+        painter.drawPixmap(target, icon, QRectF(icon.rect()))
     painter.end()
-    pixmap.setDevicePixelRatio(dpr)
     return pixmap
 
 
