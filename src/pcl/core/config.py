@@ -83,7 +83,6 @@ class AdvancedOptions:
     curseforge_api_key: str = ""
     auto_analyze_crash: bool = True
     keep_old_logs: bool = True
-    ignored_versions: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -91,7 +90,8 @@ class Config:
     """启动器配置根对象。"""
 
     schema_version: int = CONFIG_SCHEMA_VERSION
-    selected_instance: str = ""
+    selected_version: str = ""
+    selected_instance: str = ""  # 旧版字段，仅用于迁移到 selected_version
     selected_account: str = ""
     close_to_tray: bool = False
     launch: LaunchOptions = field(default_factory=LaunchOptions)

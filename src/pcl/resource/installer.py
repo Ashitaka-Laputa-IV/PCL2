@@ -1,4 +1,4 @@
-"""把 Modrinth 版本安装到实例：主文件 + 必需前置。"""
+"""把 Modrinth 项目安装到游戏版本：主文件 + 必需前置。"""
 
 from __future__ import annotations
 
@@ -7,13 +7,13 @@ from pathlib import Path
 
 from pcl.core.config import DownloadOptions
 from pcl.core.logging import get_logger
-from pcl.instance.model import Instance
+from pcl.version.local import LocalVersion
 from pcl.net.downloader import DownloadManager, DownloadTask
 from pcl.resource.modrinth import ModrinthClient, ProjectVersion
 
 log = get_logger(__name__)
 
-#: project_type -> 实例内目录
+#: project_type -> 版本内目录
 PROJECT_DIRS = {
     "mod": "mods",
     "resourcepack": "resourcepacks",
@@ -122,24 +122,24 @@ def install_version(
     return result
 
 
-def install_to_instance(
-    version: ProjectVersion,
+def install_to_version(
+    project_version: ProjectVersion,
     project_type: str,
-    instance: Instance,
+    target: LocalVersion,
     paths,
     *,
     options: DownloadOptions | None = None,
     client: ModrinthClient | None = None,
 ) -> ResourceInstallResult:
-    """便捷入口：安装到指定实例的游戏目录。"""
-    game_dir = instance.game_dir(paths)
+    """便捷入口：安装到指定版本的游戏目录。"""
+    game_dir = target.game_dir(paths)
     game_dir.mkdir(parents=True, exist_ok=True)
     return install_version(
-        version,
+        project_version,
         project_type,
         game_dir,
         options=options,
         client=client,
-        game_version=instance.mc_version,
-        loader=instance.loader if instance.loader != "vanilla" else "",
+        game_version=target.mc_version,
+        loader=target.loader if target.loader != "vanilla" else "",
     )

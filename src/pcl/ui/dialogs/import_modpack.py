@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtWidgets import QCheckBox, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QWidget
+from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QLineEdit, QWidget
 
 from pcl.core.errors import friendly_message
 from pcl.modpack import FORMAT_LABELS, detect_format
@@ -48,12 +48,8 @@ class ImportModpackDialog(BaseDialog):
         self.body.addWidget(self._format)
 
         self._name = QLineEdit(self)
-        self._name.setPlaceholderText("实例名称（留空则使用整合包名称）")
+        self._name.setPlaceholderText("版本名称（留空则使用整合包名称）")
         self.body.addWidget(self._name)
-
-        self._install = QCheckBox("同时安装游戏本体与加载器", self)
-        self._install.setChecked(True)
-        self.body.addWidget(self._install)
 
         self._status = QLabel("", self)
         self._status.setObjectName("Muted")
@@ -109,8 +105,8 @@ class ImportModpackDialog(BaseDialog):
         def done(result) -> None:
             self._importing = False
             self.result = result
-            self.context.select_instance(result.instance.id)
-            messages = [f"已导入实例：{result.instance.name}"]
+            self.context.select_version(result.version.id)
+            messages = [f"已导入版本：{result.version.name}"]
             if result.downloaded:
                 messages.append(f"下载 {result.downloaded} 个文件")
             if result.failed:
@@ -140,10 +136,9 @@ class ImportModpackDialog(BaseDialog):
             path,
             self.context.paths,
             self.context.config.download,
-            instance_manager=self.context.instances,
+            store=self.context.versions,
             api_key=self.context.config.advanced.curseforge_api_key,
             java_path=self.context.config.launch.java_path or None,
-            install_game=self._install.isChecked(),
             name_override=self._name.text().strip(),
         )
 

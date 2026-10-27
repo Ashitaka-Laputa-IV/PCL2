@@ -1,4 +1,4 @@
-"""实例导出：HMCL / PCL 通用 zip，以及尽力而为的 Modrinth 格式。"""
+"""版本导出：HMCL / PCL 通用 zip，以及尽力而为的 Modrinth 格式。"""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from typing import Iterable
 from pcl.core.errors import ModpackError
 from pcl.core.logging import get_logger
 from pcl.core.paths import AppPaths
-from pcl.instance.model import Instance
+from pcl.version.local import LocalVersion
 from pcl.modpack import hmcl, pcl
 from pcl.net.http import sha1_file
 
@@ -72,22 +72,22 @@ def _write_zip(dest: Path, prefix: str, entries: Iterable[tuple[Path, str]], ext
 
 
 def export_hmcl(
-    instance: Instance,
+    version: LocalVersion,
     paths: AppPaths,
     dest: Path,
     *,
     include_saves: bool = False,
 ) -> ExportResult:
     """导出为 HMCL 整合包。"""
-    game_dir = instance.game_dir(paths)
+    game_dir = version.game_dir(paths)
     if not game_dir.is_dir():
-        raise ModpackError("实例目录不存在，无法导出。")
+        raise ModpackError("版本目录不存在，无法导出。")
     manifest = hmcl.build_manifest(
-        instance.name,
-        instance.mc_version,
-        instance.loader,
-        instance.loader_version,
-        instance.notes,
+        version.name,
+        version.mc_version,
+        version.loader,
+        version.loader_version,
+        version.notes,
     )
     extra = {"modpack.json": json.dumps(manifest, ensure_ascii=False, indent=2)}
     count = _write_zip(dest, ".minecraft", _iter_content(game_dir, include_saves), extra)
@@ -97,17 +97,17 @@ def export_hmcl(
 
 
 def export_pcl(
-    instance: Instance,
+    version: LocalVersion,
     paths: AppPaths,
     dest: Path,
     *,
     include_saves: bool = False,
 ) -> ExportResult:
     """导出为 PCL 整合包。"""
-    game_dir = instance.game_dir(paths)
+    game_dir = version.game_dir(paths)
     if not game_dir.is_dir():
-        raise ModpackError("实例目录不存在，无法导出。")
-    setup = pcl.build_setup_ini(instance.name, instance.mc_version, instance.loader, instance.loader_version)
+        raise ModpackError("版本目录不存在，无法导出。")
+    setup = pcl.build_setup_ini(version.name, version.mc_version, version.loader, version.loader_version)
     extra = {"PCL/Setup.ini": setup}
     count = _write_zip(dest, ".minecraft", _iter_content(game_dir, include_saves), extra)
     result = ExportResult(dest, "pcl", count, dest.stat().st_size, [])
@@ -116,7 +116,7 @@ def export_pcl(
 
 
 def export_modrinth(
-    instance: Instance,
+    version: LocalVersion,
     paths: AppPaths,
     dest: Path,
     *,
@@ -127,9 +127,9 @@ def export_modrinth(
     本地文件缺少原始下载地址，``downloads`` 只能留空；这样的整合包可被解析，
     但重新安装时仍需手动补齐文件，因此结果中会附带说明。
     """
-    game_dir = instance.game_dir(paths)
+    game_dir = version.game_dir(paths)
     if not game_dir.is_dir():
-        raise ModpackError("实例目录不存在，无法导出。")
+        raise ModpackError("版本目录不存在，无法导出。")
 
     entries = list(_iter_content(game_dir, include_saves))
     files: list[dict[str, object]] = []
@@ -152,18 +152,18 @@ def export_modrinth(
     index = {
         "formatVersion": 1,
         "game": "minecraft",
-        "versionId": instance.name,
-        "name": instance.name,
-        "summary": instance.notes,
+        "versionId": version.name,
+        "name": version.name,
+        "summary": version.notes,
         "files": files,
-        "dependencies": {"minecraft": instance.mc_version},
+        "dependencies": {"minecraft": version.mc_version},
     }
-    if instance.loader == "fabric" and instance.loader_version:
-        index["dependencies"]["fabric-loader"] = instance.loader_version
-    elif instance.loader == "quilt" and instance.loader_version:
-        index["dependencies"]["quilt-loader"] = instance.loader_version
-    elif instance.loader in ("forge", "neoforge") and instance.loader_version:
-        index["dependencies"][instance.loader] = instance.loader_version
+    if version.loader == "fabric" and version.loader_version:
+        index["dependencies"]["fabric-loader"] = version.loader_version
+    elif version.loader == "quilt" and version.loader_version:
+        index["dependencies"]["quilt-loader"] = version.loader_version
+    elif version.loader in ("forge", "neoforge") and version.loader_version:
+        index["dependencies"][version.loader] = version.loader_version
 
     count = _write_zip(
         dest,
@@ -183,9 +183,9 @@ EXPORTERS = {
 }
 
 
-def export(instance: Instance, paths: AppPaths, dest: Path, kind: str = "hmcl", **kwargs: object) -> ExportResult:
+def export(version: LocalVersion, paths: AppPaths, dest: Path, kind: str = "hmcl", **kwargs: object) -> ExportResult:
     """按格式导出。"""
     exporter = EXPORTERS.get(kind)
     if exporter is None:
         raise ModpackError(f"不支持的导出格式：{kind}")
-    return exporter(instance, paths, dest, **kwargs)  # type: ignore[arg-type]
+    return exporter(version, paths, dest, **kwargs)  # type: ignore[arg-type]

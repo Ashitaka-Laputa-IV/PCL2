@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
 
 import pytest
 
@@ -13,12 +15,21 @@ pytest.importorskip("PySide6")
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from pcl.core.config import Config  # noqa: E402
-from pcl.instance.manager import InstanceManager  # noqa: E402
 from pcl.launch.auth import AccountStore  # noqa: E402
 from pcl.services import AppContext  # noqa: E402
 from pcl.ui.main_window import MainWindow  # noqa: E402
+from pcl.version.store import VersionStore  # noqa: E402
 
 pytestmark = pytest.mark.gui
+
+
+def write_version(paths, version_id: str = "1.20.1", document: dict | None = None) -> None:
+    """在共享目录写入一个最小可识别版本。"""
+    directory = paths.version_dir(version_id)
+    directory.mkdir(parents=True, exist_ok=True)
+    payload = document or {"id": version_id, "type": "release"}
+    (directory / f"{version_id}.json").write_text(json.dumps(payload), encoding="utf-8")
+    (directory / f"{version_id}.jar").write_bytes(b"jar")
 
 
 @pytest.fixture(scope="module")
@@ -36,26 +47,40 @@ def context(paths):
         paths=paths,
         config=Config(),
         accounts=accounts,
-        instances=InstanceManager(paths),
+        versions=VersionStore(paths),
     )
 
 
-def test_main_window_navigation(qapp, context) -> None:
-    context.instances.create("冒烟实例", "1.20.1", loader="fabric", loader_version="0.15.7")
+def test_main_window_navigation(qapp, context, paths) -> None:
+    write_version(paths)
     window = MainWindow(context)
     window.resize(1100, 720)
     window.show()
     qapp.processEvents()
 
-    assert set(window.pages) == {"home", "instances", "download", "content", "settings", "more", "detail"}
-    for key in ("instances", "download", "content", "settings", "home"):
+    assert set(window.pages) == {"home", "versions", "download", "content", "settings", "more", "detail"}
+    for key in ("versions", "download", "content", "settings", "home"):
         window.navigate(key)
         qapp.processEvents()
         assert window.stack.currentWidget() is window.pages[key]
 
-    # 页面内实例下拉应包含刚创建的实例
-    combo = window.pages["content"]._instance_combo
+    # 页面内版本下拉应包含刚安装的版本
+    combo = window.pages["content"]._version_combo
     assert combo.count() == 1
+    window.close()
+
+
+def test_version_detail_navigation(qapp, context, paths) -> None:
+    write_version(paths)
+    window = MainWindow(context)
+    window.show()
+    qapp.processEvents()
+
+    version = context.list_versions()[0]
+    window.open_version_detail(version.id)
+    qapp.processEvents()
+    assert window.stack.currentWidget() is window.pages["detail"]
+    assert window.pages["detail"].version is not None
     window.close()
 
 
@@ -89,18 +114,16 @@ def test_toast_and_empty_state(qapp, context) -> None:
     window.close()
 
 
-def test_new_instance_dialog_minimal(qapp, context) -> None:
-    from pcl.ui.dialogs.new_instance import NewInstanceDialog
+def test_import_modpack_dialog_minimal(qapp, context, tmp_path: Path) -> None:
+    from pcl.ui.dialogs.import_modpack import ImportModpackDialog
     from pcl.ui.workers import EventBridge, TaskRunner
 
     bridge = EventBridge()
     tasks = TaskRunner(max_threads=2)
-    dialog = NewInstanceDialog(context, tasks, bridge)
+    dialog = ImportModpackDialog(context, tasks, bridge)
     dialog.show()
     qapp.processEvents()
-    assert dialog._version.count() >= len(context.installed_versions())
-    if not context.installed_versions() and not dialog._packs:
-        assert not dialog._ok.isEnabled()
+    assert dialog._path.text() == ""
     dialog.close()
     bridge.detach()
     tasks.shutdown(500)

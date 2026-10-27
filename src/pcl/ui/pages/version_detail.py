@@ -1,4 +1,4 @@
-"""实例详情页：概览、设置、内容、存档与服务器的统一入口。"""
+"""版本详情页：概览、设置、内容、存档与服务器的统一入口。"""
 
 from __future__ import annotations
 
@@ -27,9 +27,9 @@ from pcl.content.conflict import check_conflicts
 from pcl.content.manager import ContentManager
 from pcl.content.updates import ModUpdate, check_mod_updates, download_update
 from pcl.core.errors import friendly_message
-from pcl.instance.model import Instance
-from pcl.instance.saves import WorldInfo, backup_world, delete_world, scan_worlds
-from pcl.instance.servers import ServerEntry, ServerList
+from pcl.version.local import LocalVersion
+from pcl.game.saves import WorldInfo, backup_world, delete_world, scan_worlds
+from pcl.game.servers import ServerEntry, ServerList
 from pcl.services import AppContext
 from pcl.ui.dialogs.confirm import ask_text, confirm
 from pcl.ui import icons
@@ -65,15 +65,15 @@ def _rounded_icon(text: str, size: int = 56, color: QColor | None = None) -> QPi
     return pixmap
 
 
-class InstanceDetailPage(BasePage):
-    """实例详情。"""
+class VersionDetailPage(BasePage):
+    """版本详情。"""
 
-    title = "实例详情"
+    title = "版本详情"
     subtitle = ""
 
     def __init__(self, context: AppContext, bridge, tasks, parent: QWidget | None = None) -> None:
         super().__init__(context, bridge, tasks, parent)
-        self.instance: Instance | None = None
+        self.version: LocalVersion | None = None
         self._build()
 
     # ---------- 构建 ----------
@@ -87,7 +87,7 @@ class InstanceDetailPage(BasePage):
 
         back_row = QHBoxLayout()
         back = AnimatedButton("← 返回", self, variant="ghost", height=28)
-        back.clicked.connect(lambda: self.window().navigate("instances") if hasattr(self.window(), "navigate") else None)
+        back.clicked.connect(lambda: self.window().navigate("versions") if hasattr(self.window(), "navigate") else None)
         back_row.addWidget(back)
         back_row.addStretch(1)
         outer.addLayout(back_row)
@@ -103,7 +103,7 @@ class InstanceDetailPage(BasePage):
 
         titles = QVBoxLayout()
         titles.setSpacing(4)
-        self._name = QLabel("选择一个实例", self._cover)
+        self._name = QLabel("选择一个版本", self._cover)
         self._name.setStyleSheet("color: #FFFFFF; font-size: 22px; font-weight: 700;")
         self._tags = QLabel("", self._cover)
         self._tags.setStyleSheet("color: rgba(255,255,255,0.82); font-size: 12px;")
@@ -176,11 +176,11 @@ class InstanceDetailPage(BasePage):
         actions.setSpacing(8)
         action_defs = (
             ("打开游戏目录", "folder", self._open_game_dir),
-            ("重命名实例", "edit", self._rename),
-            ("复制实例", "copy", self._duplicate),
+            ("重命名版本", "edit", self._rename),
+            ("复制版本", "copy", self._duplicate),
             ("选择图标", "content", self._pick_icon),
             ("导出整合包", "download", self._export),
-            ("删除实例", "trash", self._delete),
+            ("删除版本", "trash", self._delete),
         )
         for index, (label, icon, handler) in enumerate(action_defs):
             button = AnimatedButton(label, action_card, variant="secondary", icon_name=icon, height=36)
@@ -400,9 +400,9 @@ class InstanceDetailPage(BasePage):
         layout.addLayout(footer)
         return page
 
-    # ---------- 打开实例 ----------
-    def open_instance(self, instance: Instance) -> None:
-        self.instance = instance
+    # ---------- 打开版本 ----------
+    def open_version(self, version: LocalVersion) -> None:
+        self.version = version
         self._refresh_header()
         self._tabs.setCurrentIndex(0)
         self._load_overview()
@@ -410,19 +410,19 @@ class InstanceDetailPage(BasePage):
         self._reload_content_all()
 
     def _refresh_header(self) -> None:
-        instance = self.instance
-        if instance is None:
+        version = self.version
+        if version is None:
             return
-        self._name.setText(instance.name)
-        loader = "原版" if instance.loader == "vanilla" else instance.loader.capitalize()
-        parts = [f"Minecraft {instance.mc_version}", loader]
-        if instance.loader_version:
-            parts.append(instance.loader_version)
-        played = f"启动 {instance.play_count} 次"
+        self._name.setText(version.name)
+        loader = "原版" if version.loader == "vanilla" else version.loader.capitalize()
+        parts = [f"Minecraft {version.mc_version}", loader]
+        if version.loader_version:
+            parts.append(version.loader_version)
+        played = f"启动 {version.play_count} 次"
         parts.append(played)
         self._tags.setText(" · ".join(parts))
 
-        icon_path = Path(instance.icon_path) if instance.icon_path else None
+        icon_path = Path(version.icon_path) if version.icon_path else None
         if icon_path and icon_path.is_file():
             pixmap = QPixmap(str(icon_path))
             if not pixmap.isNull():
@@ -430,11 +430,11 @@ class InstanceDetailPage(BasePage):
                     pixmap.scaled(64, 64, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
                 )
                 return
-        self._icon.setPixmap(_rounded_icon(instance.name, 64, self.palette().highlight().color().lighter(118)))
+        self._icon.setPixmap(_rounded_icon(version.name, 64, self.palette().highlight().color().lighter(118)))
 
     def _load_overview(self) -> None:
-        instance = self.instance
-        if instance is None:
+        version = self.version
+        if version is None:
             return
         while self._info_grid.count():
             item = self._info_grid.takeAt(0)
@@ -443,16 +443,16 @@ class InstanceDetailPage(BasePage):
                 widget.setParent(None)
                 widget.deleteLater()
 
-        game_dir = instance.game_dir(self.context.paths)
+        game_dir = version.game_dir(self.context.paths)
         rows = [
-            ("游戏版本", instance.mc_version),
-            ("加载器", "原版" if instance.loader == "vanilla" else instance.loader.capitalize()),
-            ("加载器版本", instance.loader_version or "—"),
-            ("启动版本", instance.version_id),
+            ("游戏版本", version.mc_version),
+            ("加载器", "原版" if version.loader == "vanilla" else version.loader.capitalize()),
+            ("加载器版本", version.loader_version or "—"),
+            ("版本 ID", version.id),
             ("游戏目录", str(game_dir)),
-            ("Java 路径", instance.java_path or "跟随全局设置"),
-            ("最大内存", f"{instance.memory_mb} MB" if instance.memory_mb else "跟随全局设置"),
-            ("自动进入", instance.server or "—"),
+            ("Java 路径", version.java_path or "跟随全局设置"),
+            ("最大内存", f"{version.memory_mb} MB" if version.memory_mb else "跟随全局设置"),
+            ("自动进入", version.server or "—"),
         ]
         for index, (key, value) in enumerate(rows):
             label = QLabel(f"{key}", self)
@@ -482,48 +482,48 @@ class InstanceDetailPage(BasePage):
         bar.setValue(bar.maximum())
 
     def _load_settings(self) -> None:
-        instance = self.instance
-        if instance is None:
+        version = self.version
+        if version is None:
             return
         self._java.blockSignals(True)
         self._java.clear()
         self._java.addItem("跟随全局设置", "")
         for runtime in self.context.java_runtimes:
             self._java.addItem(f"{runtime.label}", str(runtime.path))
-        if instance.java_path:
-            self._java.addItem(f"自定义：{instance.java_path}", instance.java_path)
-        index = self._java.findData(instance.java_path or "")
+        if version.java_path:
+            self._java.addItem(f"自定义：{version.java_path}", version.java_path)
+        index = self._java.findData(version.java_path or "")
         self._java.setCurrentIndex(max(0, index))
         self._java.blockSignals(False)
 
-        self._memory.setValue(instance.memory_mb)
-        self._width.setValue(instance.window_width)
-        self._height.setValue(instance.window_height)
-        self._server_edit.setText(instance.server)
-        self._jvm_args.setText(" ".join(instance.jvm_args))
-        self._game_args.setText(" ".join(instance.game_args))
-        self._notes.setText(instance.notes)
+        self._memory.setValue(version.memory_mb)
+        self._width.setValue(version.window_width)
+        self._height.setValue(version.window_height)
+        self._server_edit.setText(version.server)
+        self._jvm_args.setText(" ".join(version.jvm_args))
+        self._game_args.setText(" ".join(version.game_args))
+        self._notes.setText(version.notes)
 
     def _save_settings(self) -> None:
-        instance = self.instance
-        if instance is None:
+        version = self.version
+        if version is None:
             return
-        instance.java_path = str(self._java.currentData() or "")
-        instance.memory_mb = self._memory.value()
-        instance.window_width = self._width.value()
-        instance.window_height = self._height.value()
-        instance.server = self._server_edit.text().strip()
-        instance.jvm_args = self._jvm_args.text().split()
-        instance.game_args = self._game_args.text().split()
-        instance.notes = self._notes.text().strip()
+        version.java_path = str(self._java.currentData() or "")
+        version.memory_mb = self._memory.value()
+        version.window_width = self._width.value()
+        version.window_height = self._height.value()
+        version.server = self._server_edit.text().strip()
+        version.jvm_args = self._jvm_args.text().split()
+        version.game_args = self._game_args.text().split()
+        version.notes = self._notes.text().strip()
         try:
-            self.context.instances.save(instance)
+            self.context.versions.save(version)
         except Exception as error:
             show_toast(self, friendly_message(error), "error")
             return
         self._load_overview()
         self._refresh_header()
-        show_toast(self, "实例设置已保存", "success")
+        show_toast(self, "版本设置已保存", "success")
 
     # ---------- 内容刷新 ----------
     def _on_tab_changed(self, index: int) -> None:
@@ -543,9 +543,9 @@ class InstanceDetailPage(BasePage):
             self._reload_content(kind)
 
     def _reload_content(self, kind: str) -> None:
-        instance = self.instance
+        version = self.version
         widget = self._content_tabs.get(kind)
-        if instance is None or widget is None:
+        if version is None or widget is None:
             return
         banner, layout = self._content_ui[kind]
         while layout.count() > 1:
@@ -555,10 +555,10 @@ class InstanceDetailPage(BasePage):
                 child.setParent(None)
                 child.deleteLater()
 
-        manager = ContentManager(self.context.paths, instance)
+        manager = ContentManager(self.context.paths, version)
         if kind == "mods":
             items = manager.mods()
-            report = check_conflicts(items, instance.mc_version)
+            report = check_conflicts(items, version.mc_version)
             if report.ok:
                 banner.setVisible(False)
             else:
@@ -659,10 +659,10 @@ class InstanceDetailPage(BasePage):
         self._reload_content_all()
 
     def _set_all_enabled(self, kind: str, enabled: bool) -> None:
-        instance = self.instance
-        if instance is None:
+        version = self.version
+        if version is None:
             return
-        manager = ContentManager(self.context.paths, instance)
+        manager = ContentManager(self.context.paths, version)
         if kind == "mods":
             items = manager.mods()
         elif kind == "resourcepacks":
@@ -685,13 +685,13 @@ class InstanceDetailPage(BasePage):
         show_toast(self, text, "success" if not failed else "error")
 
     def _check_updates(self, button) -> None:
-        instance = self.instance
-        if instance is None:
+        version = self.version
+        if version is None:
             return
-        manager = ContentManager(self.context.paths, instance)
+        manager = ContentManager(self.context.paths, version)
         mods = [item for item in manager.mods() if item.enabled]
         if not mods:
-            show_toast(self, "当前实例没有启用的 Mod", "error")
+            show_toast(self, "当前版本没有启用的 Mod", "error")
             return
         button.set_loading(True, "检查中…")
 
@@ -714,8 +714,8 @@ class InstanceDetailPage(BasePage):
             check_mod_updates,
             mods,
             self.context.client(),
-            mc_version=instance.mc_version,
-            loader=instance.loader,
+            mc_version=version.mc_version,
+            loader=version.loader,
             on_done=done,
             on_error=failed,
         )
@@ -746,22 +746,22 @@ class InstanceDetailPage(BasePage):
         )
 
     def _open_content_dir(self, kind: str) -> None:
-        instance = self.instance
-        if instance is None:
+        version = self.version
+        if version is None:
             return
-        manager = ContentManager(self.context.paths, instance)
+        manager = ContentManager(self.context.paths, version)
         self._open_path(manager.directory(kind))
 
     def _import_content(self, kind: str) -> None:
-        instance = self.instance
-        if instance is None:
+        version = self.version
+        if version is None:
             return
         files, _ = QFileDialog.getOpenFileNames(
             self, "选择要导入的文件", str(Path.home()), "支持的文件 (*.jar *.zip *.disabled);;所有文件 (*)"
         )
         if not files:
             return
-        manager = ContentManager(self.context.paths, instance)
+        manager = ContentManager(self.context.paths, version)
 
         def done(installed) -> None:
             show_toast(self, f"已导入 {len(installed)} 个文件", "success")
@@ -801,10 +801,10 @@ class InstanceDetailPage(BasePage):
                 widget.setParent(None)
                 widget.deleteLater()
 
-        instance = self.instance
-        if instance is None:
+        version = self.version
+        if version is None:
             return
-        worlds = scan_worlds(instance.game_dir(self.context.paths))
+        worlds = scan_worlds(version.game_dir(self.context.paths))
         if not worlds:
             self._worlds_list.addWidget(self._empty_hint("还没有存档，进入游戏创建世界后会显示在这里。"))
             return
@@ -883,10 +883,10 @@ class InstanceDetailPage(BasePage):
 
     # ---------- 服务器 ----------
     def _server_list(self) -> ServerList | None:
-        instance = self.instance
-        if instance is None:
+        version = self.version
+        if version is None:
             return None
-        return ServerList(instance.game_dir(self.context.paths) / "servers.dat")
+        return ServerList(version.game_dir(self.context.paths) / "servers.dat")
 
     def _load_servers(self) -> None:
         while self._server_list_layout.count():
@@ -974,24 +974,24 @@ class InstanceDetailPage(BasePage):
         self._load_servers()
 
     def _connect_server(self, entry: ServerEntry) -> None:
-        instance = self.instance
-        if instance is None:
+        version = self.version
+        if version is None:
             return
-        instance.server = entry.ip
-        self.context.instances.save(instance)
+        version.server = entry.ip
+        self.context.versions.save(version)
         self._server_edit.setText(entry.ip)
         self._launch()
 
     # ---------- 操作 ----------
     def _launch(self) -> None:
-        instance = self.instance
-        if instance is None:
+        version = self.version
+        if version is None:
             return
-        if not self.context.version_installed(instance.version_id):
+        if not self.context.version_installed(version.id):
             if confirm(
                 self,
                 "版本文件缺失",
-                f"「{instance.name}」对应的版本 {instance.version_id} 尚未安装，是否前往下载页安装？",
+                f"「{version.name}」的游戏文件已缺失，是否前往下载页重新安装？",
                 ok_text="前往下载",
             ):
                 navigate = getattr(self.window(), "navigate", None)
@@ -1014,11 +1014,11 @@ class InstanceDetailPage(BasePage):
             self._launch_button.setEnabled(True)
             show_toast(self, message, "error")
 
-        self.tasks.submit(self.context.launch, instance, on_done=done, on_error=failed)
+        self.tasks.submit(self.context.launch, version, on_done=done, on_error=failed)
 
     def _analyze_crash(self) -> None:
-        instance = self.instance
-        if instance is None:
+        version = self.version
+        if version is None:
             return
 
         def done(report) -> None:
@@ -1026,15 +1026,15 @@ class InstanceDetailPage(BasePage):
 
         self.tasks.submit(
             self.context.crash_report,
-            instance,
+            version,
             on_done=done,
             on_error=lambda message: show_toast(self, message, "error"),
         )
 
     def _open_game_dir(self) -> None:
-        instance = self.instance
-        if instance is not None:
-            self._open_path(instance.game_dir(self.context.paths))
+        version = self.version
+        if version is not None:
+            self._open_path(version.game_dir(self.context.paths))
 
     def _open_path(self, path: Path) -> None:
         try:
@@ -1049,63 +1049,63 @@ class InstanceDetailPage(BasePage):
             show_toast(self, f"无法打开目录：{error}", "error")
 
     def _rename(self) -> None:
-        instance = self.instance
-        if instance is None:
+        version = self.version
+        if version is None:
             return
-        name = ask_text(self, "重命名实例", "新的实例名称", instance.name)
+        name = ask_text(self, "重命名版本", "新的版本名称", version.name)
         if not name:
             return
         try:
-            self.instance = self.context.instances.rename(instance.id, name)
+            self.version = self.context.versions.rename(version.id, name)
         except Exception as error:
             show_toast(self, friendly_message(error), "error")
             return
         self._refresh_header()
 
     def _duplicate(self) -> None:
-        instance = self.instance
-        if instance is None:
+        version = self.version
+        if version is None:
             return
         try:
-            clone = self.context.instances.duplicate(instance.id)
+            clone = self.context.versions.duplicate(version.id)
         except Exception as error:
             show_toast(self, friendly_message(error), "error")
             return
         show_toast(self, f"已复制为 {clone.name}", "success")
 
     def _delete(self) -> None:
-        instance = self.instance
-        if instance is None:
+        version = self.version
+        if version is None:
             return
         if not confirm(
             self,
-            "删除实例",
-            f"确定删除「{instance.name}」吗？实例目录与其中的 Mod / 存档将一并删除。",
+            "删除版本",
+            f"确定删除「{version.name}」吗？版本目录与其中的 Mod / 存档将一并删除。",
             ok_text="删除",
             danger=True,
         ):
             return
         try:
-            self.context.instances.delete(instance.id)
+            self.context.versions.delete(version.id)
         except Exception as error:
             show_toast(self, friendly_message(error), "error")
             return
-        if self.context.config.selected_instance == instance.id:
-            self.context.config.selected_instance = ""
+        if self.context.config.selected_version == version.id:
+            self.context.config.selected_version = ""
             self.context.save_config()
-        self.instance = None
+        self.version = None
         window = self.window()
         if hasattr(window, "navigate"):
-            window.navigate("instances")
+            window.navigate("versions")
 
     def _pick_icon(self) -> None:
-        instance = self.instance
-        if instance is None:
+        version = self.version
+        if version is None:
             return
-        path, _ = QFileDialog.getOpenFileName(self, "选择实例图标", str(Path.home()), "图片 (*.png *.jpg *.jpeg)")
+        path, _ = QFileDialog.getOpenFileName(self, "选择版本图标", str(Path.home()), "图片 (*.png *.jpg *.jpeg)")
         if not path:
             return
-        target = self.context.paths.instance_dir(instance.id) / "icon.png"
+        target = self.context.paths.version_dir(version.id) / "icon.png"
         try:
             from PySide6.QtGui import QImage
 
@@ -1117,16 +1117,16 @@ class InstanceDetailPage(BasePage):
         except Exception as error:
             show_toast(self, f"保存图标失败：{error}", "error")
             return
-        instance.icon_path = str(target)
-        self.context.instances.save(instance)
+        version.icon_path = str(target)
+        self.context.versions.save(version)
         self._refresh_header()
         show_toast(self, "图标已更新", "success")
 
     def _export(self) -> None:
-        instance = self.instance
-        if instance is None:
+        version = self.version
+        if version is None:
             return
-        path, _ = QFileDialog.getSaveFileName(self, "导出整合包", f"{instance.name}.zip", "整合包 (*.zip *.mrpack)")
+        path, _ = QFileDialog.getSaveFileName(self, "导出整合包", f"{version.name}.zip", "整合包 (*.zip *.mrpack)")
         if not path:
             return
         kind = "modrinth" if path.endswith(".mrpack") else "pcl"
@@ -1138,7 +1138,7 @@ class InstanceDetailPage(BasePage):
 
         self.tasks.submit(
             exporter.export,
-            instance,
+            version,
             self.context.paths,
             Path(path),
             kind,
@@ -1152,8 +1152,8 @@ class InstanceDetailPage(BasePage):
             event.acceptProposedAction()
 
     def dropEvent(self, event) -> None:  # noqa: N802
-        instance = self.instance
-        if instance is None:
+        version = self.version
+        if version is None:
             return
         index = self._tabs.currentIndex()
         if not 2 <= index <= 4:
@@ -1162,7 +1162,7 @@ class InstanceDetailPage(BasePage):
         paths = [Path(url.toLocalFile()) for url in event.mimeData().urls() if url.isLocalFile()]
         if not paths:
             return
-        manager = ContentManager(self.context.paths, instance)
+        manager = ContentManager(self.context.paths, version)
 
         def done(installed) -> None:
             show_toast(self, f"已导入 {len(installed)} 个文件", "success")
@@ -1178,11 +1178,11 @@ class InstanceDetailPage(BasePage):
         event.acceptProposedAction()
 
     def refresh(self) -> None:
-        if self.instance is not None:
+        if self.version is not None:
             try:
-                self.instance = self.context.instances.get(self.instance.id)
+                self.version = self.context.versions.get(self.version.id)
             except Exception:
-                self.instance = None
-            if self.instance is not None:
+                self.version = None
+            if self.version is not None:
                 self._refresh_header()
                 self._load_overview()

@@ -30,10 +30,10 @@ from pcl.ui.pages.base import BasePage
 from pcl.ui.pages.content import ContentPage
 from pcl.ui.pages.download import DownloadPage
 from pcl.ui.pages.home import HomePage
-from pcl.ui.pages.instance_detail import InstanceDetailPage
-from pcl.ui.pages.instances import InstancesPage
 from pcl.ui.pages.more import MorePage
 from pcl.ui.pages.settings import SettingsPage
+from pcl.ui.pages.version_detail import VersionDetailPage
+from pcl.ui.pages.versions import VersionsPage
 from pcl.ui.widgets.progress import GradientProgressBar
 from pcl.ui.widgets.title_bar import TitleBar
 from pcl.ui.widgets.toast import show_toast
@@ -43,7 +43,7 @@ log = get_logger(__name__)
 
 NAV_ITEMS = (
     ("home", "home", "主页"),
-    ("instances", "instances", "版本管理"),
+    ("versions", "instances", "版本管理"),
     ("download", "download", "下载"),
     ("content", "content", "资源管理"),
     ("settings", "settings", "设置"),
@@ -257,42 +257,42 @@ class MainWindow(QMainWindow):
     def _register_pages(self) -> None:
         factories = {
             "home": HomePage,
-            "instances": InstancesPage,
+            "versions": VersionsPage,
             "download": DownloadPage,
             "content": ContentPage,
             "settings": SettingsPage,
             "more": MorePage,
-            "detail": InstanceDetailPage,
+            "detail": VersionDetailPage,
         }
         for key, factory in factories.items():
             page = factory(self.context, self.bridge, self.tasks, self)
             self.pages[key] = page
             self.stack.addWidget(page)
 
-    def open_instance_detail(self, instance_id: str) -> None:
-        """打开指定实例的详情页。"""
+    def open_version_detail(self, version_id: str) -> None:
+        """打开指定版本的详情页。"""
         try:
-            instance = self.context.instances.get(instance_id)
+            version = self.context.versions.get(version_id)
         except Exception as error:
             show_toast(self, friendly_message(error), "error")
             return
-        self.context.select_instance(instance.id)
+        self.context.select_version(version.id)
         detail = self.pages.get("detail")
-        if detail is not None and hasattr(detail, "open_instance"):
-            detail.open_instance(instance)
+        if detail is not None and hasattr(detail, "open_version"):
+            detail.open_version(version)
         self.navigate("detail")
 
     def navigate(self, key: str) -> None:
         page = self.pages.get(key)
         if page is None:
             return
-        if key == "detail" and hasattr(page, "instance") and page.instance is None:
-            instance = self.context.current_instance()
-            if instance is None:
-                show_toast(self, "还没有实例，请先新建一个。", "warning")
-                self.navigate("instances")
+        if key == "detail" and hasattr(page, "version") and page.version is None:
+            version = self.context.current_version()
+            if version is None:
+                show_toast(self, "还没有安装任何版本，请先去下载页安装。", "warning")
+                self.navigate("download")
                 return
-            page.open_instance(instance)
+            page.open_version(version)
         if key == self._current_page:
             page.refresh()
             return
@@ -433,20 +433,20 @@ class MainWindow(QMainWindow):
             dialog = ImportModpackDialog(self.context, self.tasks, self.bridge, self, initial_path=packs[0])
             if dialog.exec() == dialog.DialogCode.Accepted:
                 show_toast(self, "整合包导入完成", "success")
-                self._refresh_pages(("instances", "home"))
+                self._refresh_pages(("versions", "home"))
 
         if others:
-            instance = self.context.current_instance()
-            if instance is None:
-                show_toast(self, "请先在版本管理中选择一个实例，再拖入 Mod / 资源包", "warning")
+            version = self.context.current_version()
+            if version is None:
+                show_toast(self, "请先在版本管理中选择一个版本，再拖入 Mod / 资源包", "warning")
                 return
             try:
-                installed = ContentManager(self.context.paths, instance).import_dropped(others)
+                installed = ContentManager(self.context.paths, version).import_dropped(others)
             except Exception as error:  # noqa: BLE001
                 show_toast(self, friendly_message(error), "error")
                 return
             if installed:
-                show_toast(self, f"已安装 {len(installed)} 个文件到 {instance.name}", "success")
+                show_toast(self, f"已安装 {len(installed)} 个文件到 {version.name}", "success")
                 self._refresh_pages(("content", "home"))
 
     def _refresh_pages(self, names: tuple[str, ...]) -> None:

@@ -1,4 +1,4 @@
-"""主页：实例/账户选择、启动大按钮、快捷入口与下载任务摘要。"""
+"""主页：版本/账户选择、启动大按钮、快捷入口与下载任务摘要。"""
 
 from __future__ import annotations
 
@@ -176,7 +176,7 @@ class HomePage(BasePage):
     """主页。"""
 
     title = "主页"
-    subtitle = "选择实例，一键开始游戏"
+    subtitle = "选择版本，一键开始游戏"
 
     def __init__(self, context: AppContext, bridge, tasks, parent: QWidget | None = None) -> None:
         super().__init__(context, bridge, tasks, parent)
@@ -194,19 +194,19 @@ class HomePage(BasePage):
         outer.setSpacing(16)
 
         header = self.build_header()
-        self._instance_combo = QComboBox(self)
-        self._instance_combo.setMinimumWidth(190)
-        self._instance_combo.currentIndexChanged.connect(self._on_instance_changed)
+        self._version_combo = QComboBox(self)
+        self._version_combo.setMinimumWidth(190)
+        self._version_combo.currentIndexChanged.connect(self._on_version_changed)
         self._account_combo = QComboBox(self)
         self._account_combo.setMinimumWidth(150)
         self._account_combo.currentIndexChanged.connect(self._on_account_changed)
         self._account_combo.setEditable(False)
         # 宽度跟随最长条目，避免「Ashikaga（离线）」这类名字被截断
-        for widget in (self._instance_combo, self._account_combo):
+        for widget in (self._version_combo, self._account_combo):
             widget.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
             widget.setMaximumWidth(360)
 
-        for widget in (self._instance_combo, self._account_combo):
+        for widget in (self._version_combo, self._account_combo):
             header.addWidget(widget)
 
         account_button = AnimatedButton("", self, variant="ghost", icon_name="user", radius=8)
@@ -239,9 +239,9 @@ class HomePage(BasePage):
 
         info = QVBoxLayout()
         info.setSpacing(8)
-        self._name_label = QLabel("还没有实例", self._hero)
+        self._name_label = QLabel("还没有版本", self._hero)
         self._name_label.setStyleSheet("color: #FFFFFF; font-size: 24px; font-weight: 700;")
-        self._version_label = QLabel("先在「版本管理」中新建实例，或从下载页安装游戏", self._hero)
+        self._version_label = QLabel("先去「下载」页安装一个游戏版本", self._hero)
         self._version_label.setStyleSheet("color: rgba(255,255,255,0.82); font-size: 13px;")
         info.addWidget(self._name_label)
         info.addWidget(self._version_label)
@@ -262,7 +262,7 @@ class HomePage(BasePage):
         info.addLayout(tags)
         info.addStretch(1)
 
-        self._detail_button = QPushButton("查看实例详情 →", self._hero)
+        self._detail_button = QPushButton("查看版本详情 →", self._hero)
         self._detail_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self._detail_button.setStyleSheet(
             "QPushButton { background: rgba(255,255,255,0.16); border: none; padding: 5px 12px;"
@@ -292,7 +292,7 @@ class HomePage(BasePage):
         grid.setSpacing(10)
         entries = (
             ("下载游戏", "download", "安装原版与加载器"),
-            ("版本管理", "instances", "管理实例与启动配置"),
+            ("版本管理", "versions", "管理已安装版本与启动配置"),
             ("资源管理", "content", "Mod / 资源包 / 光影"),
             ("设置", "settings", "Java、主题与下载选项"),
         )
@@ -308,8 +308,8 @@ class HomePage(BasePage):
         header = QHBoxLayout()
         recent_title = QLabel("最近游玩", recent)
         recent_title.setObjectName("SectionTitle")
-        more = AnimatedButton("全部实例", recent, variant="ghost", height=26)
-        more.clicked.connect(lambda: self._navigate("instances"))
+        more = AnimatedButton("全部版本", recent, variant="ghost", height=26)
+        more.clicked.connect(lambda: self._navigate("versions"))
         header.addWidget(recent_title)
         header.addStretch(1)
         header.addWidget(more)
@@ -333,39 +333,39 @@ class HomePage(BasePage):
                 # 立即脱离父级，否则 deleteLater 生效前旧磁贴仍会残留在卡片上
                 widget.setParent(None)
                 widget.deleteLater()
-        instances = self.context.instances.list_instances()[:3]
-        if not instances:
-            empty = QLabel("还没有实例，去「下载」安装一个吧。", self)
+        versions = self.context.list_versions()[:3]
+        if not versions:
+            empty = QLabel("还没有安装任何版本，去「下载」安装一个吧。", self)
             empty.setObjectName("Muted")
             self._recent_box.addWidget(empty)
             return
-        for instance in instances:
-            subtitle = instance.mc_version
-            if instance.loader != "vanilla":
-                subtitle += f" · {instance.loader.capitalize()}"
+        for version in versions:
+            subtitle = version.mc_version
+            if version.loader != "vanilla":
+                subtitle += f" · {version.loader.capitalize()}"
             color = QColor(
                 {
                     "fabric": "#D9A24B",
                     "quilt": "#A855F7",
                     "forge": "#64748B",
                     "neoforge": "#F97316",
-                }.get(instance.loader, "#22C55E")
+                }.get(version.loader, "#22C55E")
             )
             tile = QuickTile(
                 "instances",
-                instance.name,
+                version.name,
                 subtitle,
                 self,
-                avatar_text=instance.name,
+                avatar_text=version.name,
                 avatar_color=color,
             )
-            tile.clicked.connect(lambda target=instance.id: self._open_instance(target))
+            tile.clicked.connect(lambda target=version.id: self._open_version(target))
             self._recent_box.addWidget(tile)
 
-    def _open_instance(self, instance_id: str) -> None:
+    def _open_version(self, version_id: str) -> None:
         window = self.window()
-        if hasattr(window, "open_instance_detail"):
-            window.open_instance_detail(instance_id)
+        if hasattr(window, "open_version_detail"):
+            window.open_version_detail(version_id)
 
     # ---------- 导航 ----------
     def _navigate(self, page: str) -> None:
@@ -374,10 +374,10 @@ class HomePage(BasePage):
             window.navigate(page)
 
     def _open_detail(self) -> None:
-        instance = self.context.current_instance()
+        version = self.context.current_version()
         window = self.window()
-        if instance is not None and hasattr(window, "open_instance_detail"):
-            window.open_instance_detail(instance.id)
+        if version is not None and hasattr(window, "open_version_detail"):
+            window.open_version_detail(version.id)
 
     def _open_accounts(self) -> None:
         from pcl.ui.dialogs.accounts import AccountsDialog
@@ -387,24 +387,23 @@ class HomePage(BasePage):
 
     # ---------- 数据刷新 ----------
     def refresh(self) -> None:
-        self.context.sync_installed_versions()
         self._refresh_choices()
         self._refresh_java_tag()
 
     def _refresh_choices(self) -> None:
-        instances = self.context.instances.list_instances()
-        current = self.context.current_instance()
+        versions = self.context.list_versions()
+        current = self.context.current_version()
 
-        self._instance_combo.blockSignals(True)
-        self._instance_combo.clear()
-        for instance in instances:
-            self._instance_combo.addItem(f"{instance.name} · {instance.label}", instance.id)
+        self._version_combo.blockSignals(True)
+        self._version_combo.clear()
+        for version in versions:
+            self._version_combo.addItem(version.name, version.id)
         if current is not None:
-            index = self._instance_combo.findData(current.id)
+            index = self._version_combo.findData(current.id)
             if index >= 0:
-                self._instance_combo.setCurrentIndex(index)
-        self._instance_combo.setEnabled(bool(instances))
-        self._instance_combo.blockSignals(False)
+                self._version_combo.setCurrentIndex(index)
+        self._version_combo.setEnabled(bool(versions))
+        self._version_combo.blockSignals(False)
 
         self._account_combo.blockSignals(True)
         self._account_combo.clear()
@@ -420,10 +419,10 @@ class HomePage(BasePage):
         self._update_hero(current)
         self._refresh_recent()
 
-    def _update_hero(self, instance) -> None:
-        if instance is None:
-            self._name_label.setText("还没有实例")
-            self._version_label.setText("先在「版本管理」中新建实例，或从下载页安装游戏")
+    def _update_hero(self, version) -> None:
+        if version is None:
+            self._name_label.setText("还没有版本")
+            self._version_label.setText("先去「下载」页安装一个游戏版本")
             self._tag_loader.setText("未选择")
             self._hint_label.setText("")
             self._detail_button.setVisible(False)
@@ -433,19 +432,19 @@ class HomePage(BasePage):
 
         self._detail_button.setVisible(True)
 
-        self._name_label.setText(instance.name)
-        loader_label = instance.loader.capitalize() if instance.loader != "vanilla" else "原版"
-        self._version_label.setText(f"Minecraft {instance.mc_version} · {loader_label}")
+        self._name_label.setText(version.name)
+        loader_label = version.loader.capitalize() if version.loader != "vanilla" else "原版"
+        self._version_label.setText(f"Minecraft {version.mc_version} · {loader_label}")
         self._tag_loader.setText(loader_label)
-        memory = instance.memory_mb or self.context.config.launch.memory_mb
+        memory = version.memory_mb or self.context.config.launch.memory_mb
         self._tag_memory.setText(f"内存 {memory} MB")
         self._refresh_java_tag()
         if self._dial is not None:
             self._dial.button.setEnabled(not self._launching)
-        if not self.context.version_installed(instance.version_id):
-            self._hint_label.setText("⚠ 该实例对应的游戏版本尚未安装，请先在下载页完成安装")
+        if not self.context.version_installed(version.id):
+            self._hint_label.setText("⚠ 该版本的游戏文件缺失，请先在下载页完成安装")
         else:
-            self._hint_label.setText(f"游戏目录：{instance.game_dir(self.context.paths)}")
+            self._hint_label.setText(f"游戏目录：{version.game_dir(self.context.paths)}")
 
     def _refresh_java_tag(self) -> None:
         runtimes = self.context.java_runtimes
@@ -455,16 +454,16 @@ class HomePage(BasePage):
             self._tag_java.setText("未检测到 Java")
 
     # ---------- 交互 ----------
-    def _on_instance_changed(self, index: int) -> None:
-        instance_id = self._instance_combo.itemData(index)
-        if not instance_id:
+    def _on_version_changed(self, index: int) -> None:
+        version_id = self._version_combo.itemData(index)
+        if not version_id:
             return
         try:
-            instance = self.context.select_instance(instance_id)
+            version = self.context.select_version(version_id)
         except Exception as error:
             show_toast(self, friendly_message(error), "error")
             return
-        self._update_hero(instance)
+        self._update_hero(version)
 
     def _on_account_changed(self, index: int) -> None:
         name = self._account_combo.itemData(index)
@@ -479,16 +478,16 @@ class HomePage(BasePage):
         if self._launching:
             return
 
-        instance = self.context.current_instance()
-        if instance is None:
-            show_toast(self, "请先新建一个实例", "warning")
-            self._navigate("instances")
+        version = self.context.current_version()
+        if version is None:
+            show_toast(self, "请先安装一个版本", "warning")
+            self._navigate("versions")
             return
-        if not self.context.version_installed(instance.version_id):
+        if not self.context.version_installed(version.id):
             if confirm(
                 self,
                 "版本文件缺失",
-                f"「{instance.name}」对应的版本 {instance.version_id} 尚未安装，是否前往下载页安装？",
+                f"「{version.name}」的游戏文件已缺失，是否前往下载页重新安装？",
                 ok_text="前往下载",
             ):
                 self._navigate("download")
@@ -524,7 +523,7 @@ class HomePage(BasePage):
                 if dialog.exec() == dialog.DialogCode.Accepted and dialog.runtime is not None:
                     self._refresh_java_tag()
 
-        self.tasks.submit(self.context.launch, instance, on_done=done, on_error=failed)
+        self.tasks.submit(self.context.launch, version, on_done=done, on_error=failed)
 
     # ---------- 事件 ----------
     def on_game_state(self, state: object) -> None:

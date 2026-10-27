@@ -10,7 +10,7 @@ import pytest
 
 from pcl.core.config import DownloadOptions
 from pcl.core.errors import ModpackError
-from pcl.instance.model import Instance
+from pcl.version.local import LocalVersion
 from pcl.modpack import detect_format, export_modpack, import_modpack, parse_modpack
 from tests.conftest import make_fabric_mod
 
@@ -141,39 +141,46 @@ def test_import_modpack_without_network(paths, tmp_path) -> None:
         DownloadOptions(),
         install_game=False,
     )
-    assert result.instance.name == "HMCL 测试包"
+    assert result.version.name == "HMCL 测试包"
     assert result.version_id == "1.20.1"
-    game_dir = result.instance.game_dir(paths)
+    game_dir = result.version.game_dir(paths)
     assert (game_dir / "config" / "demo.toml").is_file()
-    assert (paths.instance_meta(result.instance.id)).is_file()
+    assert (paths.version_meta(result.version.id)).is_file()
 
 
 def test_export_and_reparse(paths, tmp_path) -> None:
-    instance = Instance(id="export", name="导出测试", mc_version="1.20.1", loader="fabric", loader_version="0.15.7")
-    game_dir = instance.game_dir(paths)
+    version = LocalVersion(
+        id="export",
+        name="导出测试",
+        mc_version="1.20.1",
+        loader="fabric",
+        loader_version="0.15.7",
+        game_root=str(tmp_path / "game"),
+    )
+    game_dir = version.game_dir(paths)
     (game_dir / "mods").mkdir(parents=True, exist_ok=True)
     make_fabric_mod(game_dir / "mods" / "demo.jar")
     (game_dir / "options.txt").write_text("guiScale:3", encoding="utf-8")
 
-    hmcl_path = export_modpack(instance, paths, tmp_path / "out_hmcl.zip", "hmcl").path
+    hmcl_path = export_modpack(version, paths, tmp_path / "out_hmcl.zip", "hmcl").path
     assert hmcl_path.is_file()
     assert detect_format(hmcl_path) == "hmcl"
     parsed = parse_modpack(hmcl_path)
     assert parsed.name == "导出测试"
     assert parsed.loader == "fabric"
 
-    pcl_path = export_modpack(instance, paths, tmp_path / "out_pcl.zip", "pcl").path
+    pcl_path = export_modpack(version, paths, tmp_path / "out_pcl.zip", "pcl").path
     assert detect_format(pcl_path) == "pcl"
     assert parse_modpack(pcl_path).mc_version == "1.20.1"
 
 
 def test_export_modrinth_best_effort(paths, tmp_path) -> None:
-    instance = Instance(id="export2", name="MR 导出", mc_version="1.20.1")
-    game_dir = instance.game_dir(paths)
+    version = LocalVersion(id="export2", name="MR 导出", mc_version="1.20.1", game_root=str(tmp_path / "game2"))
+    game_dir = version.game_dir(paths)
     (game_dir / "mods").mkdir(parents=True, exist_ok=True)
     make_fabric_mod(game_dir / "mods" / "demo.jar")
 
-    result = export_modpack(instance, paths, tmp_path / "out.mrpack", "modrinth")
+    result = export_modpack(version, paths, tmp_path / "out.mrpack", "modrinth")
     assert result.kind == "modrinth"
     assert result.warnings
     parsed = parse_modpack(result.path)

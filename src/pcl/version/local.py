@@ -1,93 +1,92 @@
-"""实例元数据模型。
+"""本地已安装版本的元数据模型。
 
-一个实例 = 一份 ``instance.json`` + 一个游戏目录（默认实例目录下的 ``.minecraft``）。
-``version_id`` 指向共享 ``versions/`` 下真正用于启动的版本（可能是加载器版本）。
+一个版本 = ``versions/<id>/`` 目录 + 一份 ``pcl.json``（启动器附加设置）。
+版本目录名即版本标识；``name`` 只是展示用的名称，可以重名时自动加 ``-1`` / ``-2``。
 """
 
 from __future__ import annotations
 
-import re
 import time
-import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from pcl import INSTANCE_SCHEMA_VERSION
+from pcl import VERSION_SCHEMA_VERSION
 from pcl.core.paths import AppPaths
 
+LOADER_LABELS: dict[str, str] = {
+    "vanilla": "原版",
+    "fabric": "Fabric",
+    "quilt": "Quilt",
+    "forge": "Forge",
+    "neoforge": "NeoForge",
+}
 
-def slugify(name: str) -> str:
-    """把名称转换为安全的目录名。"""
-    cleaned = re.sub(r"[^\w\u4e00-\u9fff.-]+", "-", name.strip(), flags=re.UNICODE).strip("-._")
-    if not cleaned:
-        cleaned = "instance"
-    return cleaned[:40]
+
+def loader_label(kind: str) -> str:
+    """返回加载器的展示名。"""
+    return LOADER_LABELS.get((kind or "vanilla").lower(), (kind or "").capitalize())
+
+
+def default_name(mc_version: str, loader: str, loader_version: str = "") -> str:
+    """按「游戏版本 + 加载器」生成默认展示名。"""
+    kind = (loader or "vanilla").lower()
+    if kind == "vanilla":
+        return f"{mc_version} 原版"
+    suffix = f"{loader_label(kind)} {loader_version}".strip()
+    return f"{mc_version} {suffix}"
 
 
 @dataclass
-class Instance:
-    """启动器实例。"""
+class LocalVersion:
+    """一个已安装、可直接启动的游戏版本。"""
 
-    id: str
-    name: str
+    id: str  # versions/ 下的目录名，唯一
+    name: str  # 展示名，列表内唯一
     mc_version: str
-    version_id: str = ""
     loader: str = "vanilla"
     loader_version: str = ""
-    isolated: bool = True
-    game_root: str = ""  # 非空表示使用外部游戏目录（导入已有 .minecraft）
+    game_root: str = ""  # 非空表示使用独立游戏目录（版本隔离 / 旧数据迁移）
     java_path: str = ""
     memory_mb: int = 0  # 0 表示跟随全局设置
-    window_width: int = 0  # 0 表示跟随全局设置
+    window_width: int = 0
     window_height: int = 0
     jvm_args: list[str] = field(default_factory=list)
     game_args: list[str] = field(default_factory=list)
-    icon: str = ""
-    icon_path: str = ""  # 自定义图标文件（实例目录内）
-    auto_version: bool = False  # 由已安装版本自动登记（删除时记住不再重建）
+    icon_path: str = ""
     server: str = ""  # 启动后自动进入的服务器（ip 或 ip:port）
     notes: str = ""
     created_at: float = field(default_factory=time.time)
     last_played_at: float = 0.0
     play_count: int = 0
-    schema_version: int = INSTANCE_SCHEMA_VERSION
-
-    def __post_init__(self) -> None:
-        if not self.version_id:
-            self.version_id = self.mc_version
-        if not self.id:
-            self.id = f"{slugify(self.name)}-{uuid.uuid4().hex[:6]}"
+    schema_version: int = VERSION_SCHEMA_VERSION
 
     # ---------- 路径 ----------
     def game_dir(self, paths: AppPaths) -> Path:
-        """返回实例使用的游戏目录。"""
+        """返回该版本使用的游戏目录（默认与其它版本共用 .minecraft）。"""
         if self.game_root:
             return Path(self.game_root).expanduser()
-        if self.isolated:
-            return paths.instance_game_dir(self.id)
         return paths.game
-
-    def data_dir(self, paths: AppPaths) -> Path:
-        return paths.instance_dir(self.id)
 
     @property
     def label(self) -> str:
         if self.loader and self.loader != "vanilla":
-            return f"{self.mc_version} · {self.loader.capitalize()}"
+            return f"{self.mc_version} · {loader_label(self.loader)}"
         return self.mc_version
+
+    @property
+    def loader_text(self) -> str:
+        return loader_label(self.loader)
 
     # ---------- 序列化 ----------
     def to_dict(self) -> dict[str, Any]:
         return {
-            "schema_version": INSTANCE_SCHEMA_VERSION,
+            "schema_version": VERSION_SCHEMA_VERSION,
             "id": self.id,
             "name": self.name,
             "mc_version": self.mc_version,
-            "version_id": self.version_id,
             "loader": self.loader,
             "loader_version": self.loader_version,
-            "isolated": self.isolated,
             "game_root": self.game_root,
             "java_path": self.java_path,
             "memory_mb": self.memory_mb,
@@ -95,9 +94,7 @@ class Instance:
             "window_height": self.window_height,
             "jvm_args": list(self.jvm_args),
             "game_args": list(self.game_args),
-            "icon": self.icon,
             "icon_path": self.icon_path,
-            "auto_version": self.auto_version,
             "server": self.server,
             "notes": self.notes,
             "created_at": self.created_at,
@@ -106,7 +103,7 @@ class Instance:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Instance:
+    def from_dict(cls, data: dict[str, Any]) -> LocalVersion:
         def _float(value: Any, default: float = 0.0) -> float:
             try:
                 return float(value)
@@ -126,10 +123,8 @@ class Instance:
             id=str(data.get("id", "")),
             name=str(data.get("name", "")),
             mc_version=str(data.get("mc_version", "")),
-            version_id=str(data.get("version_id", "")),
             loader=str(data.get("loader", "vanilla")),
             loader_version=str(data.get("loader_version", "")),
-            isolated=bool(data.get("isolated", True)),
             game_root=str(data.get("game_root", "")),
             java_path=str(data.get("java_path", "")),
             memory_mb=_int(data.get("memory_mb", 0)),
@@ -137,9 +132,7 @@ class Instance:
             window_height=_int(data.get("window_height", 0)),
             jvm_args=_str_list(data.get("jvm_args")),
             game_args=_str_list(data.get("game_args")),
-            icon=str(data.get("icon", "")),
             icon_path=str(data.get("icon_path", "")),
-            auto_version=bool(data.get("auto_version", False)),
             server=str(data.get("server", "")),
             notes=str(data.get("notes", "")),
             created_at=_float(data.get("created_at", time.time()), time.time()),

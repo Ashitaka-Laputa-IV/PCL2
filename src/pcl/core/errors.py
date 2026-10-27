@@ -59,10 +59,6 @@ class LaunchError(PclError):
     default_message = "游戏启动失败。"
 
 
-class InstanceError(PclError):
-    default_message = "实例操作失败。"
-
-
 class ContentError(PclError):
     default_message = "资源文件处理失败。"
 

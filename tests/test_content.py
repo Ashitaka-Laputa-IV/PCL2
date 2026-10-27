@@ -13,7 +13,7 @@ from pcl.content.manager import ContentManager
 from pcl.content.mods import parse_mod, scan_mods
 from pcl.content.resourcepack import is_shader_pack, parse_pack
 from pcl.core.errors import ContentError
-from pcl.instance.model import Instance
+from pcl.version.local import LocalVersion
 from tests.conftest import make_fabric_mod, make_forge_mod, make_resource_pack, make_shader_pack
 
 
@@ -82,8 +82,8 @@ def test_resource_and_shader_pack(tmp_path) -> None:
 
 
 def test_content_manager_toggle_and_delete(paths, tmp_path) -> None:
-    instance = Instance(id="demo", name="演示", mc_version="1.20.1")
-    manager = ContentManager(paths, instance)
+    version = LocalVersion(id="demo", name="演示", mc_version="1.20.1")
+    manager = ContentManager(paths, version)
     mods_dir = manager.directory("mods")
     mods_dir.mkdir(parents=True, exist_ok=True)
     mod = make_fabric_mod(mods_dir / "demo.jar", name="Demo")
@@ -111,8 +111,8 @@ def test_content_manager_toggle_and_delete(paths, tmp_path) -> None:
 
 
 def test_install_conflict_naming(paths, tmp_path) -> None:
-    instance = Instance(id="demo2", name="演示2", mc_version="1.20.1")
-    manager = ContentManager(paths, instance)
+    version = LocalVersion(id="demo2", name="演示2", mc_version="1.20.1")
+    manager = ContentManager(paths, version)
     source = make_fabric_mod(tmp_path / "same.jar")
     first = manager.install_files([source])[0]
     second = manager.install_files([source])[0]
@@ -121,8 +121,8 @@ def test_install_conflict_naming(paths, tmp_path) -> None:
 
 
 def test_detect_kind(paths, tmp_path) -> None:
-    instance = Instance(id="demo3", name="演示3", mc_version="1.20.1")
-    manager = ContentManager(paths, instance)
+    version = LocalVersion(id="demo3", name="演示3", mc_version="1.20.1")
+    manager = ContentManager(paths, version)
     assert manager.detect_kind(make_fabric_mod(tmp_path / "m.jar")) == "mods"
     assert manager.detect_kind(make_resource_pack(tmp_path / "p.zip")) == "resourcepacks"
     assert manager.detect_kind(make_shader_pack(tmp_path / "s.zip")) == "shaderpacks"

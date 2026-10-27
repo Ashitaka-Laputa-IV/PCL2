@@ -197,7 +197,7 @@ class ContentPage(BasePage):
     """资源管理。"""
 
     title = "资源管理"
-    subtitle = "管理当前实例的 Mod、资源包与光影"
+    subtitle = "管理当前版本的 Mod、资源包与光影"
 
     def __init__(self, context: AppContext, bridge, tasks, parent: QWidget | None = None) -> None:
         super().__init__(context, bridge, tasks, parent)
@@ -213,10 +213,10 @@ class ContentPage(BasePage):
         outer.setSpacing(12)
 
         header = self.build_header()
-        self._instance_combo = QComboBox(self)
-        self._instance_combo.setMinimumWidth(200)
-        self._instance_combo.currentIndexChanged.connect(self._on_instance_changed)
-        header.addWidget(self._instance_combo)
+        self._version_combo = QComboBox(self)
+        self._version_combo.setMinimumWidth(200)
+        self._version_combo.currentIndexChanged.connect(self._on_version_changed)
+        header.addWidget(self._version_combo)
 
         self._update_button = AnimatedButton("检查更新", self, variant="secondary")
         self._update_button.clicked.connect(self._check_updates)
@@ -290,10 +290,10 @@ class ContentPage(BasePage):
         return KIND_TABS[max(0, min(index, len(KIND_TABS) - 1))][0]
 
     def _manager(self) -> ContentManager | None:
-        instance = self.context.current_instance()
-        if instance is None:
+        version = self.context.current_version()
+        if version is None:
             return None
-        return ContentManager(self.context.paths, instance)
+        return ContentManager(self.context.paths, version)
 
     def refresh(self) -> None:
         self._refresh_choices()
@@ -311,13 +311,13 @@ class ContentPage(BasePage):
                 widget.deleteLater()
 
         if manager is None:
-            self._show_empty(layout, "还没有实例，请先在「版本管理」中创建。")
+            self._show_empty(layout, "还没有版本，请先在「下载」页安装。?")
             self._banner.setVisible(False)
             return
 
         if kind == "mods":
             items = manager.mods()
-            report = check_conflicts(items, manager.instance.mc_version)
+            report = check_conflicts(items, manager.version.mc_version)
             self._update_banner(report)
         elif kind == "resourcepacks":
             items = manager.resourcepacks()
@@ -443,11 +443,11 @@ class ContentPage(BasePage):
     def _check_updates(self) -> None:
         manager = self._manager()
         if manager is None:
-            show_toast(self, "请先选择一个实例", "error")
+            show_toast(self, "请先选择一个版本", "error")
             return
         mods = [item for item in manager.mods() if item.enabled]
         if not mods:
-            show_toast(self, "当前实例没有启用的 Mod", "error")
+            show_toast(self, "当前版本没有启用的 Mod", "error")
             return
         self._update_button.set_loading(True, "检查中…")
 
@@ -473,8 +473,8 @@ class ContentPage(BasePage):
             check_mod_updates,
             mods,
             self.context.client(),
-            mc_version=manager.instance.mc_version,
-            loader=manager.instance.loader,
+            mc_version=manager.version.mc_version,
+            loader=manager.version.loader,
             on_done=done,
             on_error=failed,
         )
@@ -507,22 +507,22 @@ class ContentPage(BasePage):
         )
 
     def _refresh_choices(self) -> None:
-        instances = self.context.instances.list_instances()
-        current = self.context.current_instance()
-        self._instance_combo.blockSignals(True)
-        self._instance_combo.clear()
-        for instance in instances:
-            self._instance_combo.addItem(f"{instance.name} · {instance.label}", instance.id)
+        versions = self.context.list_versions()
+        current = self.context.current_version()
+        self._version_combo.blockSignals(True)
+        self._version_combo.clear()
+        for version in versions:
+            self._version_combo.addItem(version.name, version.id)
         if current is not None:
-            index = self._instance_combo.findData(current.id)
+            index = self._version_combo.findData(current.id)
             if index >= 0:
-                self._instance_combo.setCurrentIndex(index)
-        self._instance_combo.blockSignals(False)
+                self._version_combo.setCurrentIndex(index)
+        self._version_combo.blockSignals(False)
 
-    def _on_instance_changed(self, index: int) -> None:
-        instance_id = self._instance_combo.itemData(index)
-        if instance_id:
-            self.context.select_instance(str(instance_id))
+    def _on_version_changed(self, index: int) -> None:
+        version_id = self._version_combo.itemData(index)
+        if version_id:
+            self.context.select_version(str(version_id))
             self._selected.clear()
             self._updates.clear()
             self.refresh()
@@ -531,7 +531,7 @@ class ContentPage(BasePage):
     def _open_directory(self) -> None:
         manager = self._manager()
         if manager is None:
-            show_toast(self, "请先创建实例", "warning")
+            show_toast(self, "请先在下载页安装一个版本", "warning")
             return
         path = manager.directory(self._current_kind())
         path.mkdir(parents=True, exist_ok=True)
@@ -548,7 +548,7 @@ class ContentPage(BasePage):
     def _import_files(self) -> None:
         manager = self._manager()
         if manager is None:
-            show_toast(self, "请先创建实例", "warning")
+            show_toast(self, "请先在下载页安装一个版本", "warning")
             return
         files, _ = QFileDialog.getOpenFileNames(
             self,
@@ -562,7 +562,7 @@ class ContentPage(BasePage):
     def _install(self, sources: list[Path]) -> None:
         manager = self._manager()
         if manager is None:
-            show_toast(self, "请先创建实例", "warning")
+            show_toast(self, "请先在下载页安装一个版本", "warning")
             return
 
         def done(installed) -> None:

@@ -11,13 +11,13 @@ from pcl.core.config import DownloadOptions
 from pcl.core.errors import ModpackError
 from pcl.core.logging import get_logger
 from pcl.core.paths import AppPaths
-from pcl.instance.manager import InstanceManager
-from pcl.instance.model import Instance
 from pcl.modpack import curseforge, exporter, hmcl, mrpack, pcl as pcl_pack
 from pcl.modpack.base import ParsedModpack, extract_prefixes, safe_join
 from pcl.net.downloader import DownloadManager, DownloadTask
 from pcl.version import loaders
 from pcl.version.installer import VanillaInstaller
+from pcl.version.local import LocalVersion
+from pcl.version.store import VersionStore
 
 log = get_logger(__name__)
 
@@ -34,7 +34,7 @@ FORMAT_LABELS = {
 class ImportResult:
     """整合包导入结果。"""
 
-    instance: Instance
+    version: LocalVersion
     kind: str = ""
     downloaded: int = 0
     failed: list[str] = field(default_factory=list)
@@ -145,78 +145,75 @@ def import_modpack(
     paths: AppPaths,
     options: DownloadOptions | None = None,
     *,
-    instance_manager: InstanceManager | None = None,
+    store: VersionStore | None = None,
     api_key: str = "",
     java_path: str | None = None,
     install_game: bool = True,
     name_override: str = "",
 ) -> ImportResult:
-    """把整合包还原为一个可启动实例。"""
+    """把整合包还原成一个可直接启动的版本。"""
     started = time.monotonic()
     options = options or DownloadOptions()
-    manager = instance_manager or InstanceManager(paths)
+    store = store or VersionStore(paths)
 
     parsed = parse_modpack(path, api_key=api_key)
     if not parsed.mc_version:
         raise ModpackError("整合包没有声明游戏版本，无法导入。")
 
-    name = (name_override or parsed.name or path.stem).strip()
-    instance = manager.create(
-        name,
-        parsed.mc_version,
-        version_id=parsed.mc_version,
-        loader=parsed.loader,
-        loader_version=parsed.loader_version,
-    )
-    game_dir = instance.game_dir(paths)
-    game_dir.mkdir(parents=True, exist_ok=True)
-
     warnings = list(parsed.warnings)
     version_id = parsed.mc_version
 
-    try:
-        if install_game and parsed.loader != "vanilla" and parsed.loader_version:
-            version_id = loaders.install_loader(
-                paths,
-                options,
-                kind=parsed.loader,
-                mc_version=parsed.mc_version,
-                loader_version=parsed.loader_version,
-                java_path=java_path,
-            )
-        elif install_game:
-            report = VanillaInstaller(paths, options).install(parsed.mc_version)
-            version_id = report.version_id
-    except Exception as error:
-        # 声明了加载器却安装失败时不能退回原版：那样用户会以为整合包装好了，
-        # 实际启动的却是没有任何 Mod 的原版。这里直接回滚实例并报错。
+    if install_game:
         try:
-            manager.delete(instance.id)
-        except Exception:  # noqa: BLE001 - 回滚失败也要把真正的错误抛出去
-            pass
-        raise ModpackError(
-            f"游戏本体/加载器安装失败：{error}",
-            detail=f"{parsed.loader} {parsed.loader_version}".strip(),
-        ) from error
+            if parsed.loader != "vanilla" and parsed.loader_version:
+                version_id = loaders.install_loader(
+                    paths,
+                    options,
+                    kind=parsed.loader,
+                    mc_version=parsed.mc_version,
+                    loader_version=parsed.loader_version,
+                    java_path=java_path,
+                )
+            else:
+                report = VanillaInstaller(paths, options).install(parsed.mc_version)
+                version_id = report.version_id
+        except Exception as error:
+            # 声明了加载器却安装失败时不能退回原版：那样用户会以为整合包装好了，
+            # 实际启动的却是没有任何 Mod 的原版。
+            raise ModpackError(
+                f"游戏本体/加载器安装失败：{error}",
+                detail=f"{parsed.loader} {parsed.loader_version}".strip(),
+            ) from error
 
-    instance.version_id = version_id
-    manager.save(instance)
+    # 同名版本已存在时自动派生 -1 / -2 副本，整合包内容互不干扰
+    version = store.adopt(version_id)
+    name = (name_override or parsed.name or path.stem).strip()
+    if name:
+        version.name = store.unique_name(name)
+        store.save(version)
+
+    # 整合包自带 Mod / 配置，使用版本独立的游戏目录
+    game_dir = paths.version_dir(version.id) / ".minecraft"
+    game_dir.mkdir(parents=True, exist_ok=True)
+    if version.game_root != str(game_dir):
+        version.game_root = str(game_dir)
+        store.save(version)
 
     _apply_overrides(parsed, game_dir)
     downloaded, failures = _install_game_files(parsed, game_dir, options)
 
     result = ImportResult(
-        instance=instance,
+        version=version,
         kind=parsed.kind,
         downloaded=downloaded,
         failed=failures,
         warnings=warnings,
         elapsed=time.monotonic() - started,
-        version_id=version_id,
+        version_id=version.id,
     )
     log.info(
         "整合包导入完成：%s（%s，%d 个下载文件，%d 个失败）",
-        instance.name,
+        version.name,
         parsed.kind,
         downloaded,
         len(failures),
@@ -225,14 +222,14 @@ def import_modpack(
 
 
 def export_modpack(
-    instance: Instance,
+    version: LocalVersion,
     paths: AppPaths,
     dest: Path,
     kind: str = "hmcl",
     **kwargs: object,
 ):
-    """把实例导出为指定格式（便捷入口）。"""
-    return exporter.export(instance, paths, dest, kind, **kwargs)
+    """把版本导出为指定格式（便捷入口）。"""
+    return exporter.export(version, paths, dest, kind, **kwargs)
 
 
 __all__ = [

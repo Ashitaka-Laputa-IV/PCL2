@@ -1,4 +1,4 @@
-"""社区资源浏览（Modrinth）：搜索、版本选择与安装到实例。"""
+"""社区资源浏览（Modrinth）：搜索、版本选择与安装到游戏版本。"""
 
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ from PySide6.QtWidgets import (
 
 from pcl.core.config import DownloadOptions
 from pcl.core.errors import friendly_message
-from pcl.instance.model import Instance
 from pcl.resource.installer import install_version
 from pcl.resource.modrinth import ModrinthClient, Project, ProjectVersion
 from pcl.services import AppContext
@@ -202,13 +201,13 @@ class CommunityBrowser(QWidget):
         self._version_combo.setEnabled(False)
         detail.add(self._version_combo)
 
-        instance_label = QLabel("安装到实例", detail)
-        instance_label.setObjectName("Muted")
-        detail.add(instance_label)
-        self._instance_combo = QComboBox(detail)
-        detail.add(self._instance_combo)
+        target_label = QLabel("安装到版本", detail)
+        target_label.setObjectName("Muted")
+        detail.add(target_label)
+        self._target_combo = QComboBox(detail)
+        detail.add(self._target_combo)
 
-        self._install_button = AnimatedButton("安装到选中实例", detail, variant="primary", height=38)
+        self._install_button = AnimatedButton("安装到选中版本", detail, variant="primary", height=38)
         self._install_button.setEnabled(False)
         self._install_button.clicked.connect(self._install)
         detail.add(self._install_button)
@@ -222,22 +221,22 @@ class CommunityBrowser(QWidget):
 
     # ---------- 数据 ----------
     def refresh(self) -> None:
-        self._reload_instances()
+        self._reload_targets()
         self._reload_game_versions()
 
-    def _reload_instances(self) -> None:
-        current = self._instance_combo.currentData()
-        self._instance_combo.blockSignals(True)
-        self._instance_combo.clear()
-        for instance in self.context.instances.list_instances():
-            self._instance_combo.addItem(f"{instance.name} · {instance.label}", instance.id)
+    def _reload_targets(self) -> None:
+        current = self._target_combo.currentData()
+        self._target_combo.blockSignals(True)
+        self._target_combo.clear()
+        for target in self.context.list_versions():
+            self._target_combo.addItem(target.name, target.id)
         if current:
-            index = self._instance_combo.findData(current)
+            index = self._target_combo.findData(current)
             if index >= 0:
-                self._instance_combo.setCurrentIndex(index)
-        self._instance_combo.blockSignals(False)
-        if self._instance_combo.count() == 0:
-            self._status.setText("还没有实例，安装前请先在「版本管理」中创建实例。")
+                self._target_combo.setCurrentIndex(index)
+        self._target_combo.blockSignals(False)
+        if self._target_combo.count() == 0:
+            self._status.setText("还没有安装任何版本，请先在「下载」页安装游戏版本。")
 
     def _reload_game_versions(self) -> None:
         if self._game_version.count() > 1:
@@ -371,13 +370,13 @@ class CommunityBrowser(QWidget):
             available = bool(self._versions)
             is_modpack = project_type == "modpack"
             self._version_combo.setEnabled(available)
-            self._instance_combo.setEnabled(not is_modpack)
-            self._install_button.setText("下载并创建实例" if is_modpack else "安装到选中实例")
-            self._install_button.setEnabled(available and (is_modpack or self._instance_combo.count() > 0))
+            self._target_combo.setEnabled(not is_modpack)
+            self._install_button.setText("下载并创建版本" if is_modpack else "安装到选中版本")
+            self._install_button.setEnabled(available and (is_modpack or self._target_combo.count() > 0))
             if not available:
                 self._status.setText("没有匹配当前筛选条件的版本，试试放宽版本或加载器。")
             elif is_modpack:
-                self._status.setText(f"共 {len(self._versions)} 个版本可选，整合包会下载并自动创建实例。")
+                self._status.setText(f"共 {len(self._versions)} 个版本可选，整合包会下载并自动创建版本。")
             else:
                 self._status.setText(f"共 {len(self._versions)} 个版本可选。")
 
@@ -421,7 +420,7 @@ class CommunityBrowser(QWidget):
                 destination,
                 self.context.paths,
                 self.context.config.download,
-                instance_manager=self.context.instances,
+                store=self.context.versions,
                 api_key=self.context.config.advanced.curseforge_api_key,
                 java_path=self.context.config.launch.java_path or None,
                 install_game=True,
@@ -429,11 +428,11 @@ class CommunityBrowser(QWidget):
             )
 
         def done(result) -> None:
-            self._install_button.set_loading(False, "下载并创建实例")
+            self._install_button.set_loading(False, "下载并创建版本")
             self._install_button.setEnabled(True)
-            self.context.select_instance(result.instance.id)
+            self.context.select_version(result.version.id)
             self.refresh()
-            message = f"已创建实例 {result.instance.name}"
+            message = f"已创建版本 {result.version.name}"
             if result.downloaded:
                 message += f"，下载 {result.downloaded} 个文件"
             if result.failed:
@@ -442,7 +441,7 @@ class CommunityBrowser(QWidget):
             show_toast(self, message, "success" if not result.failed else "warning")
 
         def failed(message: str) -> None:
-            self._install_button.set_loading(False, "下载并创建实例")
+            self._install_button.set_loading(False, "下载并创建版本")
             self._install_button.setEnabled(True)
             self._status.setText(f"导入失败：{message}")
             show_toast(self, message, "error")
@@ -463,12 +462,12 @@ class CommunityBrowser(QWidget):
         if project_type == "modpack":
             self._install_modpack(project, version)
             return
-        instance_id = self._instance_combo.currentData()
-        if not instance_id:
-            show_toast(self, "请先创建实例", "warning")
+        target_id = self._target_combo.currentData()
+        if not target_id:
+            show_toast(self, "请先在「下载」页安装一个游戏版本", "warning")
             return
         try:
-            instance = self.context.instances.get(str(instance_id))
+            target = self.context.versions.get(str(target_id))
         except Exception as error:
             show_toast(self, friendly_message(error), "error")
             return
@@ -476,14 +475,14 @@ class CommunityBrowser(QWidget):
         self._install_button.set_loading(True, "安装中")
         self._install_button.setEnabled(False)
         self._status.setText("正在下载…")
-        game_dir = instance.game_dir(self.context.paths)
+        game_dir = target.game_dir(self.context.paths)
         game_dir.mkdir(parents=True, exist_ok=True)
         options: DownloadOptions = self.context.config.download
 
-        loader = instance.loader if instance.loader != "vanilla" else ""
+        loader = target.loader if target.loader != "vanilla" else ""
 
         def done(result) -> None:
-            self._install_button.set_loading(False, "安装到选中实例")
+            self._install_button.set_loading(False, "安装到选中版本")
             self._install_button.setEnabled(True)
             if result.failures:
                 self._status.setText("部分文件失败：" + "；".join(result.failures[:2]))
@@ -495,7 +494,7 @@ class CommunityBrowser(QWidget):
                 show_toast(self, f"{project.title} 安装完成", "success")
 
         def failed(message: str) -> None:
-            self._install_button.set_loading(False, "安装到选中实例")
+            self._install_button.set_loading(False, "安装到选中版本")
             self._install_button.setEnabled(True)
             self._status.setText(f"安装失败：{message}")
             show_toast(self, message, "error")
@@ -506,7 +505,7 @@ class CommunityBrowser(QWidget):
             project.project_type or self._current_project_type(),
             game_dir,
             options=options,
-            game_version=instance.mc_version,
+            game_version=target.mc_version,
             loader=loader,
             on_done=done,
             on_error=failed,

@@ -9,14 +9,14 @@
 | 模块 | 已实现能力 |
 | --- | --- |
 | 版本下载安装 | 官方版本清单（正式版 / 快照 / 远古版）、客户端 jar、依赖库、资源索引与资源对象；`sha1` + `size` 双校验、断点续传、原子落盘；支持 Forge / NeoForge / Fabric / Quilt 合成可启动版本 |
-| 实例管理 | 新建 / 复制 / 重命名 / 删除实例、版本隔离目录、导入已有 `.minecraft`、导出整合包；`versions/` 下已安装版本会自动登记为实例（友好名称 + 加载器信息，删除后不再自动出现）；新建实例可从已安装版本下拉选择（加载器与启动版本自动识别），也可直接选择 `modpacks/`、下载目录中的 `.mrpack` / 整合包 zip 导入；支持把整合包、Mod、资源包直接拖入窗口安装 |
+| 版本管理 | 以 `versions/` 为唯一列表：安装完成即出现，可启动 / 复制 / 重命名 / 删除、导出整合包；重名自动加 `-1` / `-2`；同一版本重复安装会派生共享游戏文件的副本；支持把整合包、Mod、资源包直接拖入窗口安装 |
 | 一键装 Java | Adoptium Temurin JRE 自动下载解压到启动器目录，可指定 8/11/17/21/25 |
 | 离线启动 | 启动前自动检查版本文件是否完整，缺失时引导前往下载；支持「启动后最小化启动器」（游戏退出自动恢复）；仅离线登录（离线 UUID 与 Java 版 `UUID.nameUUIDFromBytes` 完全一致）、Java 自动扫描与按版本挑选、内存 / 窗口 / JVM / 游戏参数、`natives` 解压、实时日志与结束进程 |
 | 资源管理 | Mod（`fabric.mod.json` / `META-INF/mods.toml` / `mcmod.info`）、资源包（`pack.mcmeta`）、光影（`shaders/`）扫描；`.disabled` 启停 / 批量启停与删除；拖入安装；基于元数据的依赖缺失 / 重复 / 版本不匹配检查；Modrinth 指纹比对显示可更新版本并一键替换 |
 | 整合包 | Modrinth（`.mrpack`）、CurseForge（zip + `manifest.json`）、HMCL（`modpack.json`）、PCL（`PCL/Setup.ini`）导入；导出为 HMCL / PCL 包，Modrinth 导出为尽力而为模式 |
 | 下载引擎 | 并发线程池、按目标路径去重、镜像回退（BMCLAPI）、限速、取消、失败重试、按字节聚合的进度与速度；大文件（如整合包 `.mrpack`）自动 Range 多段并发，服务端不支持时回退单连接 |
-| 社区资源 | Modrinth 搜索与下载；选中整合包时下载 `.mrpack` 后自动导入并创建实例（无需先建实例） |
-| 实例详情 | 概览 / 设置 / 内容 / 存档 / 服务器 |
+| 社区资源 | Modrinth 搜索与下载；选中整合包时下载 `.mrpack` 后自动导入并创建版本（无需额外步骤） |
+| 版本详情 | 概览 / 设置 / 内容 / 存档 / 服务器 |
 | 崩溃分析 | 规则匹配 crash-report 与日志 |
 | 配置备份 | 设置页导出 / 导入 `config.json`，恢复启动、界面、下载与高级选项 |
 | 界面 | 无边框窗口 + 自绘标题栏、左侧图标导航、卡片式布局、页面淡入动画、亮 / 暗主题与 8 种主题色、圆角与阴影、轻提示与冲突横幅 |
@@ -30,7 +30,7 @@
 uv sync                        # 创建 .venv 并安装依赖
 uv run python -m pcl           # 启动界面
 uv run python main.py          # 等价入口
-uv run pytest                  # 运行测试（46 项）
+uv run pytest                  # 运行测试
 ```
 
 无显示环境（CI / SSH）下做界面冒烟：
@@ -47,13 +47,13 @@ QT_QPA_PLATFORM=offscreen uv run pytest -m gui
 <数据根目录>/
 ├── config.json                  # 全局配置（设置页修改即时保存）
 ├── accounts.json                # 离线账户
-├── instances/<id>/
-│   ├── instance.json            # 实例元数据
-│   └── .minecraft/              # mods / resourcepacks / shaderpacks / saves / config
-├── .minecraft/                  # 共享游戏文件
-│   ├── versions/<id>/<id>.json
+├── .minecraft/                  # 游戏文件
+│   ├── versions/<id>/
+│   │   ├── <id>.json            # 版本描述
+│   │   └── pcl.json             # 该版本的启动器设置（Java / 内存 / 图标…）
 │   ├── libraries/
 │   └── assets/
+├── instances/                   # 旧版实例目录，仅用于启动时迁移
 ├── cache/                       # 版本清单、安装器、natives 解压
 └── logs/                        # launcher.log / latest.log
 ```
@@ -65,16 +65,17 @@ src/pcl/
 ├── core/        # 路径与平台差异、配置、日志、事件总线、异常
 ├── net/         # HTTP、镜像映射、并发下载引擎
 ├── version/     # 版本清单、rules 求值、inheritsFrom 合并、资源索引、安装编排
-│   └── loaders/ # Fabric / Quilt profile 安装，Forge / NeoForge processors 链
+│   ├── loaders/ # Fabric / Quilt profile 安装，Forge / NeoForge processors 链
+│   └── store.py # 已安装版本扫描与 pcl.json 维护
 ├── launch/      # Java 扫描、参数拼装、离线账户、进程运行
-├── instance/    # 实例模型与 CRUD
+├── game/        # 存档与服务器列表
 ├── content/     # Mod / 资源包 / 光影解析、冲突检查与 Modrinth 更新检测
 ├── modpack/     # 四种整合包解析与导出
 ├── ui/          # 主窗口、页面、自绘控件、弹层、workers
 └── resources/   # QSS 模板与 SVG 图标
 ```
 
-分层原则：`core → net → domain（version/launch/instance/content/modpack）→ ui`。领域层零 Qt 依赖，可脱离界面测试；UI 的所有 IO 都通过 `ui/workers.py` 的线程池执行，仅通过 Qt 信号回到主线程。
+分层原则：`core → net → domain（version/launch/game/content/modpack）→ ui`。领域层零 Qt 依赖，可脱离界面测试；UI 的所有 IO 都通过 `ui/workers.py` 的线程池执行，仅通过 Qt 信号回到主线程。
 
 ## 实现要点
 

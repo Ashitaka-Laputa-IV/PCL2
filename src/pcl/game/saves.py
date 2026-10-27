@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping
 
-from pcl.core.errors import InstanceError
+from pcl.core.errors import VersionError
 from pcl.core.logging import get_logger
 from pcl.core.nbt import load_nbt_file
 
@@ -122,7 +122,7 @@ def delete_world(world: WorldInfo) -> None:
     try:
         shutil.rmtree(world.path)
     except OSError as error:
-        raise InstanceError("删除存档失败。", detail=str(error)) from error
+        raise VersionError("删除存档失败。", detail=str(error)) from error
 
 
 def backup_world(world: WorldInfo, dest: Path) -> Path:
@@ -139,5 +139,5 @@ def backup_world(world: WorldInfo, dest: Path) -> Path:
         temp.replace(dest)
     except OSError as error:
         temp.unlink(missing_ok=True)
-        raise InstanceError("备份存档失败。", detail=str(error)) from error
+        raise VersionError("备份存档失败。", detail=str(error)) from error
     return dest

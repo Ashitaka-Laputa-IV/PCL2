@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-from pcl.core.errors import InstanceError
+from pcl.core.errors import VersionError
 from pcl.core.logging import get_logger
 from pcl.core.nbt import NbtList, load_nbt_file, save_nbt_file
 
@@ -64,7 +64,7 @@ class ServerEntry:
 
 
 class ServerList:
-    """某个实例的服务器列表。"""
+    """某个版本的服务器列表。"""
 
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -108,12 +108,12 @@ class ServerList:
         try:
             save_nbt_file(self.path, root)
         except OSError as error:
-            raise InstanceError("保存服务器列表失败。", detail=str(error)) from error
+            raise VersionError("保存服务器列表失败。", detail=str(error)) from error
 
     def add(self, name: str, ip: str) -> ServerEntry:
         address = (ip or "").strip()
         if not address:
-            raise InstanceError("服务器地址不能为空。")
+            raise VersionError("服务器地址不能为空。")
         if ":" in address:
             host, _, port = address.rpartition(":")
             if host and port.isdigit() and 0 < int(port) < 65536:

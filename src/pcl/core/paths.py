@@ -131,6 +131,7 @@ class AppPaths:
     # ---------- 启动器自身数据 ----------
     @property
     def instances(self) -> Path:
+        """旧版「实例」目录，仅用于迁移到版本条目，不再写入。"""
         return self.root / "instances"
 
     @property
@@ -173,17 +174,9 @@ class AppPaths:
         """返回某个版本客户端 jar 的路径。"""
         return self.version_dir(version_id) / f"{version_id}.jar"
 
-    def instance_dir(self, instance_id: str) -> Path:
-        """返回实例数据目录。"""
-        return self.instances / instance_id
-
-    def instance_meta(self, instance_id: str) -> Path:
-        """返回实例元数据文件路径。"""
-        return self.instance_dir(instance_id) / "instance.json"
-
-    def instance_game_dir(self, instance_id: str) -> Path:
-        """返回实例隔离的游戏目录。"""
-        return self.instance_dir(instance_id) / ".minecraft"
+    def version_meta(self, version_id: str) -> Path:
+        """返回版本附加设置（``pcl.json``）的路径。"""
+        return self.version_dir(version_id) / "pcl.json"
 
     def ensure(self) -> AppPaths:
         """创建所有必需的目录。"""
@@ -195,7 +188,6 @@ class AppPaths:
             self.assets,
             self.asset_indexes,
             self.asset_objects,
-            self.instances,
             self.cache,
             self.logs,
             self.native_cache,

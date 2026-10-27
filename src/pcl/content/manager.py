@@ -12,7 +12,7 @@ from pcl.content.resourcepack import PackInfo, is_shader_pack, parse_pack, scan_
 from pcl.core.errors import ContentError
 from pcl.core.logging import get_logger
 from pcl.core.paths import AppPaths
-from pcl.instance.model import Instance
+from pcl.version.local import LocalVersion
 
 log = get_logger(__name__)
 
@@ -20,12 +20,12 @@ KINDS = ("mods", "resourcepacks", "shaderpacks")
 
 
 class ContentManager:
-    """实例内容管理器。"""
+    """版本内容管理器（Mod / 资源包 / 光影）。"""
 
-    def __init__(self, paths: AppPaths, instance: Instance) -> None:
+    def __init__(self, paths: AppPaths, version: LocalVersion) -> None:
         self.paths = paths
-        self.instance = instance
-        self.game_dir = instance.game_dir(paths)
+        self.version = version
+        self.game_dir = version.game_dir(paths)
 
     # ---------- 目录 ----------
     def directory(self, kind: str) -> Path:

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QHBoxLayout,
     QLabel,
@@ -180,10 +179,6 @@ class DownloadPage(BasePage):
         detail.addWidget(self._java_row)
         detail.addStretch(1)
 
-        self._create_instance_check = QCheckBox("安装完成后自动创建实例", detail)
-        self._create_instance_check.setChecked(True)
-        detail.add(self._create_instance_check)
-
         self._install_button = AnimatedButton("安装该版本", detail, variant="primary", height=40)
         self._install_button.setEnabled(False)
         self._install_button.clicked.connect(self._install_selected_version)
@@ -233,7 +228,7 @@ class DownloadPage(BasePage):
         right.add(right_title)
         self._loader_list = QListWidget(right)
         right.add(self._loader_list, 1)
-        self._install_loader_button = AnimatedButton("安装并创建实例", right, variant="primary", height=40)
+        self._install_loader_button = AnimatedButton("安装加载器", right, variant="primary", height=40)
         self._install_loader_button.clicked.connect(self._install_loader)
         right.add(self._install_loader_button)
         layout.addWidget(right, 3)
@@ -250,7 +245,7 @@ class DownloadPage(BasePage):
         card.add(title)
         description = QLabel(
             "支持 Modrinth（.mrpack）、CurseForge（zip）、HMCL 与 PCL 四种格式。\n"
-            "导入时会自动还原实例目录、下载声明的文件，并按需安装对应游戏版本与加载器。",
+            "导入时会自动下载声明的文件，并按需安装对应游戏版本与加载器，完成后直接出现在版本列表里。",
             card,
         )
         description.setObjectName("PageSubtitle")
@@ -273,7 +268,7 @@ class DownloadPage(BasePage):
         title.setStyleSheet("font-size: 19px; font-weight: 700;")
         card.add(title)
         text = QLabel(
-            "资源文件请放入对应实例的 mods / resourcepacks / shaderpacks 目录。\n"
+            "资源文件请放入对应版本的 mods / resourcepacks / shaderpacks 目录。\n"
             "在「资源管理」页可以直接拖入文件、启用或禁用、查看依赖冲突。",
             card,
         )
@@ -403,8 +398,10 @@ class DownloadPage(BasePage):
         self._detail_info.setText(
             f"安装位置：{self.context.paths.version_dir(version_id)}\n下载源：{source_label}"
         )
-        self._detail_hint.setText("该版本已安装，可重复安装以修复文件。" if installed else "")
-        self._install_button.setText("重新安装" if installed else "安装该版本")
+        self._detail_hint.setText(
+            "该版本已安装；再次安装会创建一个副本（默认名自动加 -1 / -2）。" if installed else ""
+        )
+        self._install_button.setText("再安装一份" if installed else "安装该版本")
         self._install_button.setEnabled(True)
 
         self._detail_token = version_id
@@ -486,15 +483,14 @@ class DownloadPage(BasePage):
 
         def done(report) -> None:
             self._busy = False
-            self._forget_ignored_version(version_id)
-            self._install_button.set_loading(False, "重新安装")
+            self._install_button.set_loading(False, "安装该版本")
             self._install_button.setEnabled(True)
             self._status.setText(f"{version_id} 安装完成（{report.task_count} 个文件）")
-            if self._create_instance_check.isChecked():
-                self._create_instance_for(f"{version_id} 原版", version_id, "vanilla", "", version_id)
+            version = self._adopt_version(version_id)
+            if version is not None:
+                show_toast(self, f"已安装：{version.name}", "success")
             else:
-                self.context.sync_installed_versions()
-            show_toast(self, f"{version_id} 安装完成", "success")
+                show_toast(self, f"{version_id} 安装完成", "success")
             self._refresh_version_list()
 
         def failed(message: str) -> None:
@@ -512,25 +508,27 @@ class DownloadPage(BasePage):
             on_error=failed,
         )
 
-    def _forget_ignored_version(self, version_id: str) -> None:
-        ignored = self.context.config.advanced.ignored_versions
-        if version_id in ignored:
-            ignored.remove(version_id)
-            self.context.save_config()
-
-    def _create_instance_for(self, name: str, mc_version: str, loader: str, loader_version: str, version_id: str = "") -> None:
-        self._forget_ignored_version(version_id or mc_version)
+    def _adopt_version(self, version_id: str):
+        """安装完成后登记版本：重名时自动派生 -1 / -2 副本。"""
         try:
-            instance = self.context.instances.create(
-                f"{name}",
-                mc_version,
-                version_id=version_id or mc_version,
-                loader=loader,
-                loader_version=loader_version,
-            )
-            self.context.select_instance(instance.id)
+            version = self.context.adopt_version(version_id)
         except Exception as error:
             show_toast(self, friendly_message(error), "warning")
+            return None
+        try:
+            self.context.select_version(version.id)
+        except Exception:  # noqa: BLE001 - 选择失败不影响安装结果
+            pass
+        self._refresh_lists()
+        return version
+
+    def _refresh_lists(self) -> None:
+        pages = getattr(self.window(), "pages", {})
+        for key in ("versions", "home"):
+            page = pages.get(key)
+            refresh = getattr(page, "refresh", None)
+            if callable(refresh):
+                refresh()
 
     def _load_loader_versions(self) -> None:
         mc_version = self._loader_mc.currentText().strip()
@@ -581,21 +579,18 @@ class DownloadPage(BasePage):
 
         def done(version_id) -> None:
             self._busy = False
-            self._install_loader_button.set_loading(False, "安装并创建实例")
+            self._install_loader_button.set_loading(False, "安装加载器")
             self._install_loader_button.setEnabled(True)
             self._status.setText(f"已安装 {version_id}")
-            self._create_instance_for(
-                f"{mc_version} {kind.capitalize()}",
-                mc_version,
-                kind,
-                loader_version,
-                version_id,
-            )
-            show_toast(self, f"{kind} 安装完成", "success")
+            version = self._adopt_version(version_id)
+            if version is not None:
+                show_toast(self, f"已安装：{version.name}", "success")
+            else:
+                show_toast(self, f"{kind} 安装完成", "success")
 
         def failed(message: str) -> None:
             self._busy = False
-            self._install_loader_button.set_loading(False, "安装并创建实例")
+            self._install_loader_button.set_loading(False, "安装加载器")
             self._install_loader_button.setEnabled(True)
             self._status.setText(f"安装失败：{message}")
             show_toast(self, message, "error")
@@ -612,7 +607,7 @@ class DownloadPage(BasePage):
     def _import_modpack(self) -> None:
         dialog = ImportModpackDialog(self.context, self.tasks, self.bridge, self)
         if dialog.exec() == dialog.DialogCode.Accepted and dialog.result is not None:
-            show_toast(self, f"已导入 {dialog.result.instance.name}", "success")
+            show_toast(self, f"已导入 {dialog.result.version.name}", "success")
 
     # ---------- 进度 ----------
     def _on_progress(self, progress) -> None:
