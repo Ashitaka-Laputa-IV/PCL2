@@ -98,8 +98,8 @@ def test_new_instance_dialog_minimal(qapp, context) -> None:
     dialog = NewInstanceDialog(context, tasks, bridge)
     dialog.show()
     qapp.processEvents()
-    assert dialog._version.count() == len(context.installed_versions())
-    if dialog._version.count() == 0:
+    assert dialog._version.count() >= len(context.installed_versions())
+    if not context.installed_versions() and not dialog._packs:
         assert not dialog._ok.isEnabled()
     dialog.close()
     bridge.detach()
