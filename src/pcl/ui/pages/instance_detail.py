@@ -546,20 +546,48 @@ class InstanceDetailPage(BasePage):
     def _content_row(self, manager: ContentManager, kind: str, item) -> QWidget:
         row = Card(self, padding=12, spacing=0)
         line = QHBoxLayout()
-        line.setSpacing(10)
+        line.setSpacing(11)
+
+        icon = QLabel(row)
+        icon.setFixedSize(36, 36)
+        pixmap = QPixmap()
+        data = getattr(item, "icon", None)
+        if data and pixmap.loadFromData(data):
+            icon.setPixmap(
+                pixmap.scaled(36, 36, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            )
+        else:
+            icon.setPixmap(_rounded_icon(item.display_name, 36, self.palette().highlight().color()))
+        line.addWidget(icon)
+
+        texts = QVBoxLayout()
+        texts.setSpacing(2)
         name = QLabel(item.display_name, row)
-        name.setStyleSheet("font-weight: 600;")
-        line.addWidget(name, 1)
-        detail = QLabel(getattr(item, "version_label", "") or getattr(item, "format_label", ""), row)
-        detail.setObjectName("Muted")
-        line.addWidget(detail)
+        name.setStyleSheet("font-size: 13px; font-weight: 600;")
+        name.setToolTip(getattr(item, "file_name", item.display_name))
+        texts.addWidget(name)
+        meta_parts = [getattr(item, "file_name", "")]
+        version = getattr(item, "version_label", "") or getattr(item, "format_label", "")
+        if version:
+            meta_parts.append(version)
+        loader = getattr(item, "loader", "")
+        if loader and loader != "unknown":
+            meta_parts.append(loader.capitalize())
+        meta = QLabel(" · ".join(part for part in meta_parts if part), row)
+        meta.setObjectName("Muted")
+        texts.addWidget(meta)
+        line.addLayout(texts, 1)
+
         switch = ToggleSwitch(row)
         switch.setChecked(bool(item.enabled))
         switch.toggled.connect(lambda checked, target=item: self._toggle_content(target))
         line.addWidget(switch)
-        remove = AnimatedButton("删除", row, variant="ghost", height=28)
+        remove = AnimatedButton("", row, variant="ghost", icon_name="trash", height=28)
+        remove.setFixedWidth(34)
+        remove.setToolTip("删除")
         remove.clicked.connect(lambda _=False, target=item: self._delete_content(target))
         line.addWidget(remove)
+
         container = QWidget(row)
         container.setLayout(line)
         row.add(container)
