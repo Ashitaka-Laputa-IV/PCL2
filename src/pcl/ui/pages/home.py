@@ -124,7 +124,7 @@ class LaunchDial(QWidget):
         self.ring = RingProgress(self, diameter=168, thickness=6)
         self.ring.set_track_color(QColor(255, 255, 255, 34))
         self.ring.move(0, 0)
-        self.button = AnimatedButton("启动", self, variant="hero", icon_name="play", radius=56, circular=True)
+        self.button = AnimatedButton("", self, variant="hero", icon_name="play", radius=56, circular=True)
         self.button.setFixedSize(112, 112)
         self.button.move(28, 28)
 
@@ -468,14 +468,15 @@ class HomePage(BasePage):
 
         self._launching = True
         if self._dial is not None:
-            self._dial.button.set_loading(True, "启动中")
+            self._dial.button.set_loading(True, "")
             self._dial.button.setEnabled(False)
 
         def done(runner) -> None:
             self._launching = False
             self._game_running = True
             if self._dial is not None:
-                self._dial.button.set_loading(False, "结束")
+                self._dial.button.set_loading(False, "")
+                self._dial.button.set_icon_name("stop")
                 self._dial.button.setEnabled(True)
             window = self.window()
             if hasattr(window, "show_log_window"):
@@ -485,7 +486,7 @@ class HomePage(BasePage):
         def failed(message: str) -> None:
             self._launching = False
             if self._dial is not None:
-                self._dial.button.set_loading(False, "启动")
+                self._dial.button.set_loading(False, "")
                 self._dial.button.setEnabled(True)
             show_toast(self, message, "error")
 
@@ -499,13 +500,15 @@ class HomePage(BasePage):
             return
         if not running:
             self._dial.set_progress(0)
-            self._dial.button.set_loading(False, "启动")
+            self._dial.button.set_loading(False, "")
+            self._dial.button.set_icon_name("play")
             self._dial.button.setEnabled(True)
             code = getattr(state, "exit_code", None)
             if code not in (None, 0):
                 self._hint_label.setText(f"游戏上次异常退出（退出码 {code}），可在日志窗口查看原因")
         else:
-            self._dial.button.set_loading(False, "结束")
+            self._dial.button.set_loading(False, "")
+            self._dial.button.set_icon_name("stop")
 
     def _on_download_progress(self, progress: object) -> None:
         percent = float(getattr(progress, "percent", 0.0))

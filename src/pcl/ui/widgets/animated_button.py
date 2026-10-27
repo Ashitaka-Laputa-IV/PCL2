@@ -227,10 +227,11 @@ class AnimatedButton(QPushButton):
 
         icon_width = 0
         if self._icon_name and self._circular:
-            size = 30
+            size = 36
             pixmap = icons.pixmap(self._icon_name, content_color.name(), size)
             if not pixmap.isNull():
-                painter.drawPixmap(int(rect.center().x() - size / 2), int(rect.center().y() - size - 2), pixmap)
+                offset = (size + 2) if self.text() else 0
+                painter.drawPixmap(int(rect.center().x() - size / 2), int(rect.center().y() - size / 2 - offset), pixmap)
         elif self._icon_name:
             size = 30 if self._variant == "hero" else 18
             pixmap = icons.pixmap(self._icon_name, content_color.name(), size)
