@@ -88,6 +88,7 @@ class InstanceManager:
     ) -> Instance:
         """新建实例并创建隔离目录。"""
         cleaned = (name or "").strip() or f"{mc_version} 实例"
+        cleaned = self._unique_name(cleaned)
         instance_id = self._unique_id(cleaned)
         instance = Instance(
             id=instance_id,
@@ -107,6 +108,15 @@ class InstanceManager:
                 (game_dir / sub).mkdir(parents=True, exist_ok=True)
         log.info("已创建实例 %s（%s）", instance.name, instance.mc_version)
         return instance
+
+    def _unique_name(self, name: str) -> str:
+        taken = {item.name for item in self.list_instances()}
+        candidate = name
+        counter = 2
+        while candidate in taken:
+            candidate = f"{name} ({counter})"
+            counter += 1
+        return candidate
 
     def _unique_id(self, name: str) -> str:
         base = slugify(name) or "instance"
@@ -197,7 +207,7 @@ class InstanceManager:
             jar = game_root / "versions" / version_id / f"{version_id}.jar"
             if not jar.is_file() and not document.get("inheritsFrom"):
                 continue
-            mc_version, loader, loader_version = self._describe_version(game_root, version_id)
+            mc_version, loader, loader_version = self.describe_version(game_root, version_id)
             name = self._auto_instance_name(mc_version, loader, loader_version)
             base = name
             counter = 2
@@ -250,7 +260,7 @@ class InstanceManager:
             raise InstanceError("该目录下没有找到任何已安装版本（versions/*/*.json）。")
 
         version_id = self._pick_primary_version(versions)
-        mc_version, loader, loader_version = self._describe_version(source, version_id)
+        mc_version, loader, loader_version = self.describe_version(source, version_id)
         instance_name = (name or source.parent.name or "导入的实例").strip()
         instance = self.create(
             instance_name,
@@ -283,7 +293,7 @@ class InstanceManager:
         return data if isinstance(data, dict) else None
 
     @staticmethod
-    def _describe_version(game_root: Path, version_id: str) -> tuple[str, str, str]:
+    def describe_version(game_root: Path, version_id: str) -> tuple[str, str, str]:
         """从版本 JSON 推断 MC 版本与加载器。"""
         data = InstanceManager._read_version(game_root, version_id)
         if data is None:

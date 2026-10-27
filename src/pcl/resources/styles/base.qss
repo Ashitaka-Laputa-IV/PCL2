@@ -100,7 +100,13 @@ QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QPlainTextEdit:focus {
     border-color: %ACCENT%;
     background: %SURFACE%;
 }
-QComboBox::drop-down { border: none; width: 22px; }
+QComboBox { padding-right: 30px; }
+QComboBox::drop-down { border: none; width: 26px; }
+QComboBox::down-arrow {
+    image: url("%ICON_DIR%/chevron-down.svg");
+    width: 14px;
+    height: 14px;
+}
 QComboBox QAbstractItemView {
     background: %SURFACE%;
     border: 1px solid %BORDER_SOFT%;

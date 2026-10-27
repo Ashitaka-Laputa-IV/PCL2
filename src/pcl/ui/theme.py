@@ -13,6 +13,7 @@ from pcl.core.logging import get_logger
 log = get_logger(__name__)
 
 STYLE_FILE = Path(__file__).resolve().parent.parent / "resources" / "styles" / "base.qss"
+ICONS_DIR = Path(__file__).resolve().parent.parent / "resources" / "icons"
 
 LIGHT: dict[str, str] = {
     "bg": "#F4F6FA",
@@ -64,6 +65,7 @@ def tokens_for(theme: str, accent: str, corner_radius: int = 8, font_scale: floa
     tokens["accent_soft"] = _alpha(accent, 0.14 if theme != "dark" else 0.22)
     tokens["border_soft"] = _alpha(tokens["border"], 0.75)
     tokens["radius"] = f"{int(corner_radius)}px"
+    tokens["icon_dir"] = ICONS_DIR.as_posix()
     base = 13 * float(font_scale)
     tokens["font_size"] = f"{base:.1f}px"
     tokens["font_size_small"] = f"{base - 1:.1f}px"

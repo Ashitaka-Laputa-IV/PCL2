@@ -367,6 +367,17 @@ class InstancesPage(BasePage):
         return exporter.export(instance, self.context.paths, path, kind)
 
     def create_instance(self) -> None:
+        if not self.context.installed_versions():
+            if confirm(
+                self,
+                "还没有已安装版本",
+                "新建实例需要先安装游戏版本。要现在前往「下载」页安装吗？",
+                ok_text="前往下载",
+            ):
+                navigate = getattr(self.window(), "navigate", None)
+                if callable(navigate):
+                    navigate("download")
+            return
         dialog = NewInstanceDialog(self.context, self.tasks, self.bridge, self)
         if dialog.exec() == dialog.DialogCode.Accepted and dialog.result_instance is not None:
             self.context.select_instance(dialog.result_instance.id)

@@ -89,25 +89,18 @@ def test_toast_and_empty_state(qapp, context) -> None:
     window.close()
 
 
-def test_new_instance_dialog_minimal(qapp, context, monkeypatch) -> None:
-    import pcl.ui.dialogs.new_instance as new_instance
+def test_new_instance_dialog_minimal(qapp, context) -> None:
     from pcl.ui.dialogs.new_instance import NewInstanceDialog
     from pcl.ui.workers import EventBridge, TaskRunner
-
-    class _EmptyManifest:
-        versions: list = []
-
-        def filtered(self, _kind: str):
-            return []
-
-    # 避免测试发起真实网络请求
-    monkeypatch.setattr(new_instance, "fetch_manifest", lambda *args, **kwargs: _EmptyManifest())
 
     bridge = EventBridge()
     tasks = TaskRunner(max_threads=2)
     dialog = NewInstanceDialog(context, tasks, bridge)
     dialog.show()
     qapp.processEvents()
+    assert dialog._version.count() == len(context.installed_versions())
+    if dialog._version.count() == 0:
+        assert not dialog._ok.isEnabled()
     dialog.close()
     bridge.detach()
     tasks.shutdown(500)
