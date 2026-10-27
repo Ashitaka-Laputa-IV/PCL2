@@ -15,7 +15,7 @@ from pcl.ui.widgets.toast import show_toast
 class JavaInstallDialog(BaseDialog):
     """选择大版本并自动下载安装 JRE。"""
 
-    def __init__(self, context: AppContext, tasks, bridge, parent: QWidget | None = None) -> None:
+    def __init__(self, context: AppContext, tasks, bridge, parent: QWidget | None = None, *, recommended: int | None = None) -> None:
         super().__init__(parent, title="一键安装 Java", width=480)
         self.context = context
         self.tasks = tasks
@@ -43,6 +43,8 @@ class JavaInstallDialog(BaseDialog):
         for major in SUPPORTED_MAJORS:
             self._major.addItem(f"Java {major}", major)
         self._major.setCurrentIndex(2)
+        if recommended is not None and self._major.findData(recommended) >= 0:
+            self._major.setCurrentIndex(self._major.findData(recommended))
         layout.addWidget(label)
         layout.addWidget(self._major, 1)
         self.body.addWidget(row)

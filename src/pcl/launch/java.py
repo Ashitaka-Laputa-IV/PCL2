@@ -165,7 +165,7 @@ def select_java(
     if preferred:
         path = Path(preferred)
         resolved = probe_java(path)
-        if resolved is not None:
+        if resolved is not None and (required_major is None or resolved.major >= required_major):
             return resolved
 
     items = list(runtimes)
@@ -180,15 +180,15 @@ def select_java(
     higher = sorted((item for item in items if item.major > required_major), key=lambda item: item.major)
     if higher:
         return higher[0]
-    # 没有更高版本时退回最高可用版本，由用户决定是否可行
-    return items[0]
+    # 没有满足要求的运行时：返回 None，由上层提示安装，避免用低版本硬启动
+    return None
 
 
 def find_java(required_major: int | None = None, preferred: str | None = None) -> JavaRuntime | None:
-    """便捷函数：先看用户指定路径，再扫描本机。"""
+    """便捷函数：用户指定路径满足要求时优先，否则扫描本机挑选。"""
     if preferred:
         runtime = probe_java(Path(preferred))
-        if runtime is not None:
+        if runtime is not None and (required_major is None or runtime.major >= required_major):
             return runtime
     return select_java(scan_java(), required_major=required_major)
 

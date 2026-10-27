@@ -37,3 +37,11 @@ def test_extract_and_finalize(tmp_path) -> None:
     assert runtime.path.name == "java"
     assert installed_runtime(paths, 17) is not None
     assert installed_runtime(paths, 8) is None
+
+
+def test_select_java_refuses_lower_major() -> None:
+    from pcl.launch.java import JavaRuntime, select_java
+
+    runtime = JavaRuntime(path=Path("/usr/bin/java"), version="17.0.9", major=17)
+    assert select_java([runtime], required_major=25) is None
+    assert select_java([runtime], required_major=17).major == 17

@@ -42,6 +42,13 @@ def java_root(paths: AppPaths) -> Path:
     return paths.root / "java"
 
 
+def managed_candidates(paths: AppPaths) -> list[Path]:
+    root = java_root(paths)
+    if not root.is_dir():
+        return []
+    return [p for p in root.glob("*/bin/java*") if p.name in ("java", "java.exe")]
+
+
 def installed_runtime(paths: AppPaths, major: int) -> JavaRuntime | None:
     """检查该版本是否已安装并可用。"""
     home = java_root(paths) / f"jre-{major}"

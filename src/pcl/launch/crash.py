@@ -267,6 +267,12 @@ def analyze_crash(
                 CrashReason(title=title, suggestion=suggestion, severity=severity)
             )
 
+    m = re.search(r"class file version (\d+)", text, re.I)
+    if m and "unsupportedclassversionerror" in lowered:
+        code = int(m.group(1)); need = code - 44 if code >= 49 else 8
+        result.reasons = [item for item in result.reasons if item.title != "Java 版本过低"]
+        result.reasons.insert(0, CrashReason(title=f"Java 版本过低（需要 Java {need}）", detail=f"类文件版本 {code}", suggestion=f"使用一键安装 Java {need} 后重试", severity="error"))
+
     # 退出码兜底（Windows 的 0xC0000005 与 Linux 的 139 均指向原生崩溃）
     if exit_code is not None and not result.reasons:
         if exit_code in (-1073741819, 139, -11):

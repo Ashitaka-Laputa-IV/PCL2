@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from PySide6.QtCore import QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPaintEvent, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
@@ -491,7 +493,8 @@ class HomePage(BasePage):
             show_toast(self, message, "error")
             if "Java" in message:
                 from pcl.ui.dialogs.java_install import JavaInstallDialog
-                dialog = JavaInstallDialog(self.context, self.tasks, self.bridge, self)
+                match = re.search(r"Java (\d+)", message)
+                dialog = JavaInstallDialog(self.context, self.tasks, self.bridge, self, recommended=int(match.group(1)) if match else None)
                 if dialog.exec() == dialog.DialogCode.Accepted and dialog.runtime is not None:
                     self._refresh_java_tag()
 

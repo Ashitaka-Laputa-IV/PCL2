@@ -17,7 +17,8 @@ from pcl.instance.manager import InstanceManager
 from pcl.instance.model import Instance
 from pcl.launch.args import build_plan
 from pcl.launch.auth import Account, AccountStore
-from pcl.launch.java import JavaRuntime, find_java, scan_java
+from pcl.launch.java import JavaRuntime, scan_java, select_java
+from pcl.launch.java_installer import managed_candidates
 from pcl.launch.runner import GameRunner
 from pcl.net import http
 from pcl.version import loaders, meta
@@ -60,7 +61,7 @@ class AppContext:
             accounts=accounts,
             instances=InstanceManager(paths),
         )
-        context.java_runtimes = scan_java([config.launch.java_path] if config.launch.java_path else [])
+        context.java_runtimes = scan_java(context.java_candidates())
         log.info("数据目录：%s，检测到 %d 个 Java", paths.root, len(context.java_runtimes))
         return context
 
@@ -95,9 +96,15 @@ class AppContext:
     def current_account(self) -> Account | None:
         return self.accounts.current()
 
+    def java_candidates(self) -> list[str]:
+        candidates: list[str] = []
+        if self.config.launch.java_path:
+            candidates.append(self.config.launch.java_path)
+        candidates.extend(str(path) for path in managed_candidates(self.paths))
+        return candidates
+
     def refresh_java(self) -> list[JavaRuntime]:
-        preferred = [self.config.launch.java_path] if self.config.launch.java_path else []
-        self.java_runtimes = scan_java(preferred)
+        self.java_runtimes = scan_java(self.java_candidates())
         return self.java_runtimes
 
     # ---------- 实例 ----------
@@ -143,10 +150,10 @@ class AppContext:
     def resolve_java(self, version_doc: dict, instance: Instance) -> JavaRuntime:
         required = meta.required_java_major(version_doc)
         preferred = instance.java_path or self.config.launch.java_path
-        runtime = find_java(required_major=required, preferred=preferred or None)
+        runtime = select_java(self.java_runtimes or self.refresh_java(), required_major=required, preferred=preferred or None)
         if runtime is None:
             raise JavaNotFoundError(
-                f"该版本需要 Java {required}，但没有检测到可用运行时。请在设置中指定 Java 路径。"
+                f"该版本需要 Java {required} 或更高版本，但没有找到满足要求的运行时。可点击「一键安装 Java {required}」自动安装。"
             )
         return runtime
 
