@@ -77,6 +77,45 @@ def test_rename_keeps_unique_names(paths) -> None:
     assert renamed.name == "1.20.1 原版-1"
 
 
+def _legacy_instance(paths, folder: str, name: str, version_id: str, *, played: float = 0) -> None:
+    directory = paths.root / "instances" / folder
+    (directory / ".minecraft" / "mods").mkdir(parents=True, exist_ok=True)
+    (directory / "instance.json").write_text(
+        json.dumps(
+            {
+                "name": name,
+                "mc_version": "1.20.1",
+                "version_id": version_id,
+                "isolated": True,
+                "last_played_at": played,
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_migrate_multiple_instances_of_same_version(paths) -> None:
+    _write_version(paths.game, "1.20.1", {"id": "1.20.1"})
+    _write_version(paths.game, "1.20.1-fabric-0.15.7", {"id": "1.20.1-fabric-0.15.7", "inheritsFrom": "1.20.1"}, jar=False)
+    _legacy_instance(paths, "fabric-a", "整合包 A", "1.20.1-fabric-0.15.7", played=10)
+    _legacy_instance(paths, "fabric-b", "整合包 B", "1.20.1-fabric-0.15.7", played=20)
+    _legacy_instance(paths, "vanilla", "原版生存", "1.20.1", played=30)
+
+    store = VersionStore(paths)
+    store.migrate_legacy()
+    versions = {item.name: item for item in store.list_versions()}
+    assert set(versions) == {"整合包 A", "整合包 B", "原版生存"}
+    assert versions["整合包 A"].game_dir(paths) == paths.root / "instances" / "fabric-a" / ".minecraft"
+    assert versions["整合包 B"].game_dir(paths) == paths.root / "instances" / "fabric-b" / ".minecraft"
+    assert versions["原版生存"].game_dir(paths) == paths.root / "instances" / "vanilla" / ".minecraft"
+    assert versions["整合包 B"].last_played_at == 20
+
+    # 迁移可重复执行：不会再次派生副本
+    store.migrate_legacy()
+    assert len(store.list_versions()) == 3
+
+
 def test_migrate_legacy_instance(paths) -> None:
     _write_version(paths.game, "1.20.1", {"id": "1.20.1"})
     legacy = paths.root / "instances" / "demo"

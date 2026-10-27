@@ -273,15 +273,33 @@ class VersionStore:
     def migrate_legacy(self) -> list[LocalVersion]:
         """把旧版 ``instances/*/instance.json`` 的设置并入对应版本。
 
-        旧实例的隔离目录会记录到 ``game_root``，游戏文件与存档不会丢失。
+        - 同一个版本对应多个旧实例时，第一个沿用版本条目，其余派生 ``-1`` / ``-2``；
+        - 旧实例的隔离目录记录到 ``game_root``，Mod 与存档不会丢失；
+        - 已经迁移过的 ``instance.json.migrated`` 也会再扫一遍，便于修复中断的迁移。
         """
         legacy_root = self.paths.instances
         if not legacy_root.is_dir():
             return []
+
+        # 先把已安装版本全部登记，避免在迁移过程中反复触发自动登记
+        self.list_versions()
+        existing = {}
+        for version_id in self.installed_ids():
+            meta = self._read_meta(version_id)
+            if meta is not None:
+                existing[version_id] = meta
+        taken = {meta.name for meta in existing.values()}
+        consumed: set[str] = set()
         migrated: list[LocalVersion] = []
+
         for directory in sorted(legacy_root.iterdir()):
-            meta_file = directory / "instance.json"
-            if not meta_file.is_file():
+            meta_file = None
+            for name in ("instance.json", "instance.json.migrated"):
+                candidate = directory / name
+                if candidate.is_file():
+                    meta_file = candidate
+                    break
+            if meta_file is None:
                 continue
             try:
                 data = json.loads(meta_file.read_text(encoding="utf-8"))
@@ -290,42 +308,95 @@ class VersionStore:
                 continue
             if not isinstance(data, dict):
                 continue
+
             version_id = str(data.get("version_id") or data.get("mc_version") or "")
             if not version_id or not self.paths.version_json(version_id).is_file():
+                # 版本文件已不存在，保留旧数据以便用户自行处理
                 continue
-            if self.exists(version_id):
-                meta_file.rename(meta_file.with_suffix(".json.migrated"))
-                continue
+
             game_root = ""
             if data.get("isolated"):
                 game_root = str(directory / ".minecraft")
             elif data.get("game_root"):
                 game_root = str(data["game_root"])
+            settings = self._legacy_settings(data)
             mc_version, loader, loader_version = self.describe(version_id)
-            version = LocalVersion(
-                id=version_id,
-                name=self.unique_name(str(data.get("name") or default_name(mc_version, loader, loader_version))),
-                mc_version=mc_version,
-                loader=loader,
-                loader_version=loader_version,
-                game_root=game_root,
-                java_path=str(data.get("java_path") or ""),
-                memory_mb=int(data.get("memory_mb") or 0),
-                window_width=int(data.get("window_width") or 0),
-                window_height=int(data.get("window_height") or 0),
-                jvm_args=[str(item) for item in data.get("jvm_args") or []],
-                game_args=[str(item) for item in data.get("game_args") or []],
-                icon_path=str(data.get("icon_path") or ""),
-                server=str(data.get("server") or ""),
-                notes=str(data.get("notes") or ""),
-                created_at=float(data.get("created_at") or time.time()),
-                last_played_at=float(data.get("last_played_at") or 0),
-                play_count=int(data.get("play_count") or 0),
-            )
-            self.save(version)
-            meta_file.rename(meta_file.with_suffix(".json.migrated"))
-            migrated.append(version)
+            base = default_name(mc_version, loader, loader_version)
+            legacy_name = str(data.get("name") or "").strip()
+
+            # 已经指向同一个隔离目录的条目：本次迁移已经覆盖过这个实例
+            target = next((item for item in existing.values() if game_root and item.game_root == game_root), None)
+            if target is None:
+                meta = existing.get(version_id)
+                if meta is not None and version_id not in consumed and not meta.game_root:
+                    target = meta
+            if target is None and version_id not in existing:
+                # 版本文件不完整（例如缺客户端 jar），无法作为可启动版本登记
+                log.warning("旧实例 %s 对应的版本 %s 不完整，已跳过迁移", directory.name, version_id)
+                continue
+            if target is None:
+                # 同一版本的第二个及以后的旧实例：派生副本，保留各自的隔离目录
+                target = self.duplicate(version_id)
+                target.game_root = game_root
+                for key, value in settings.items():
+                    setattr(target, key, value)
+                if legacy_name:
+                    taken.discard(target.name)
+                    target.name = self._unique_name(legacy_name, taken)
+                self.save(target)
+                existing[target.id] = target
+                taken.add(target.name)
+                migrated.append(target)
+            else:
+                changed = self._merge_legacy(target, settings, game_root)
+                if legacy_name and target.name != legacy_name:
+                    # 自动生成的默认名（含迁移中断留下的 -N 后缀）允许改回用户起的名字
+                    if target.name == base or target.name.startswith(f"{base}-"):
+                        if legacy_name not in taken:
+                            taken.discard(target.name)
+                            target.name = legacy_name
+                            taken.add(legacy_name)
+                            changed = True
+                if changed:
+                    self.save(target)
+                if target not in migrated:
+                    migrated.append(target)
+            consumed.add(version_id)
+            if meta_file.suffix == ".json":
+                meta_file.rename(meta_file.with_suffix(".json.migrated"))
 
         if migrated:
             log.info("已迁移 %d 个旧实例到版本条目", len(migrated))
         return migrated
+
+    @staticmethod
+    def _legacy_settings(data: dict) -> dict:
+        return {
+            "java_path": str(data.get("java_path") or ""),
+            "memory_mb": int(data.get("memory_mb") or 0),
+            "window_width": int(data.get("window_width") or 0),
+            "window_height": int(data.get("window_height") or 0),
+            "jvm_args": [str(item) for item in data.get("jvm_args") or []],
+            "game_args": [str(item) for item in data.get("game_args") or []],
+            "icon_path": str(data.get("icon_path") or ""),
+            "server": str(data.get("server") or ""),
+            "notes": str(data.get("notes") or ""),
+            "last_played_at": float(data.get("last_played_at") or 0),
+            "play_count": int(data.get("play_count") or 0),
+        }
+
+    @staticmethod
+    def _merge_legacy(version: LocalVersion, settings: dict, game_root: str) -> bool:
+        """把旧实例的非默认值填进版本条目，已有设置不被覆盖。"""
+        changed = False
+        if game_root and not version.game_root:
+            version.game_root = game_root
+            changed = True
+        for key, value in settings.items():
+            if not value:
+                continue
+            current = getattr(version, key)
+            if current in ("", 0, [], 0.0):
+                setattr(version, key, value)
+                changed = True
+        return changed
