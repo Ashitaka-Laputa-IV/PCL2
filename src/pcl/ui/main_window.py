@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, Qt, QTimer
+from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QKeySequence, QPainter, QPainterPath, QShortcut
 from PySide6.QtWidgets import (
     QAbstractButton,
@@ -63,7 +63,10 @@ class NavButton(QAbstractButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         accent = self.palette().highlight().color()
-        rect = self.rect().adjusted(4, 4, -4, -4)
+        side = 38.0
+        cx = self.width() / 2.0
+        cy = self.height() / 2.0
+        rect = QRectF(cx - side / 2, cy - side / 2, side, side)
 
         if self.isChecked() or self.underMouse():
             background = QColor(accent)
@@ -72,12 +75,17 @@ class NavButton(QAbstractButton):
             painter.setBrush(background)
             painter.drawRoundedRect(rect, 11, 11)
 
+        if self.isChecked():
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(accent)
+            painter.drawRoundedRect(QRectF(0.0, cy - 10.0, 3.0, 20.0), 1.5, 1.5)
+
         color = accent if self.isChecked() else QColor("#7C8899")
         pixmap = icons.pixmap(self.icon_name, color.name(), 22)
         if not pixmap.isNull():
             painter.drawPixmap(
-                int(rect.center().x() - pixmap.width() / 2),
-                int(rect.center().y() - pixmap.height() / 2),
+                int(rect.center().x() - pixmap.deviceIndependentSize().width() / 2),
+                int(rect.center().y() - pixmap.deviceIndependentSize().height() / 2),
                 pixmap,
             )
         painter.end()
