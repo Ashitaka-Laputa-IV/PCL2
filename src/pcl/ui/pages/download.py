@@ -40,7 +40,15 @@ LOADER_CHOICES = (
 class VersionRow(QWidget):
     """版本列表富行：版本号 + 类型徽章 + 发布日期。"""
 
-    def __init__(self, version_id: str, type_label: str, date: str, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        version_id: str,
+        type_label: str,
+        date: str,
+        parent: QWidget | None = None,
+        *,
+        installed: bool = False,
+    ) -> None:
         super().__init__(parent)
         row = QHBoxLayout(self)
         row.setContentsMargins(10, 5, 12, 5)
@@ -53,6 +61,13 @@ class VersionRow(QWidget):
         when.setObjectName("Muted")
         row.addWidget(name)
         row.addWidget(tag)
+        if installed:
+            badge = QLabel("已安装", self)
+            badge.setStyleSheet(
+                "background: rgba(34, 197, 94, 0.14); color: #16A34A;"
+                " border-radius: 9px; padding: 2px 9px; font-size: 11px; font-weight: 600;"
+            )
+            row.addWidget(badge)
         row.addStretch(1)
         row.addWidget(when)
 
@@ -100,6 +115,7 @@ class DownloadPage(BasePage):
         self._status.setObjectName("Muted")
         self._progress = GradientProgressBar(self, height=6)
         self._progress.setFixedWidth(240)
+        self._progress.setVisible(False)
         status.addWidget(self._progress)
         status.addWidget(self._status, 1)
         outer.addLayout(status)
@@ -264,6 +280,7 @@ class DownloadPage(BasePage):
         if self._manifest is not None and not force:
             return
         self._status.setText("正在获取版本列表…")
+        self._show_list_hint("正在获取版本列表…")
 
         def done(manifest) -> None:
             self._manifest = manifest
@@ -274,6 +291,7 @@ class DownloadPage(BasePage):
 
         def failed(message: str) -> None:
             self._status.setText(f"获取失败：{message}")
+            self._show_list_hint(f"获取版本列表失败：{message}")
 
         self.tasks.submit(
             fetch_manifest,
@@ -285,6 +303,12 @@ class DownloadPage(BasePage):
             on_done=done,
             on_error=failed,
         )
+
+    def _show_list_hint(self, text: str) -> None:
+        self._version_list.clear()
+        item = QListWidgetItem(text)
+        item.setFlags(Qt.ItemFlag.NoItemFlags)
+        self._version_list.addItem(item)
 
     def _refresh_version_list(self) -> None:
         if self._manifest is None:
@@ -303,7 +327,13 @@ class DownloadPage(BasePage):
             self._version_list.addItem(item)
             self._version_list.setItemWidget(
                 item,
-                VersionRow(entry.id, meta.version_type_label(entry.type), entry.release_date, self._version_list),
+                VersionRow(
+                    entry.id,
+                    meta.version_type_label(entry.type),
+                    entry.release_date,
+                    self._version_list,
+                    installed=self.context.version_installed(entry.id),
+                ),
             )
         if entries:
             self._version_list.setCurrentRow(0)
@@ -362,6 +392,7 @@ class DownloadPage(BasePage):
             if self._create_instance_check.isChecked():
                 self._create_instance_for(version_id, version_id, "vanilla", "")
             show_toast(self, f"{version_id} 安装完成", "success")
+            self._refresh_version_list()
 
         def failed(message: str) -> None:
             self._busy = False
@@ -478,6 +509,8 @@ class DownloadPage(BasePage):
         percent = float(getattr(progress, "percent", 0.0))
         speed = float(getattr(progress, "speed", 0.0))
         current = str(getattr(progress, "current", ""))
+        active = int(getattr(progress, "active", 0))
+        self._progress.setVisible(active > 0)
         self._progress.set_value(percent)
         if current and self._busy:
             speed_text = f" · {speed / 1024 / 1024:.1f} MB/s" if speed > 0 else ""
