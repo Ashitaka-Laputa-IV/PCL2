@@ -294,13 +294,13 @@ class HomePage(BasePage):
         grid = QGridLayout()
         grid.setSpacing(10)
         entries = (
-            ("下载游戏", "download", "安装原版与加载器"),
-            ("版本管理", "versions", "管理已安装版本与启动配置"),
-            ("资源管理", "content", "Mod / 资源包 / 光影"),
-            ("设置", "settings", "Java、主题与下载选项"),
+            ("下载游戏", "download", "download", "安装原版与加载器"),
+            ("版本管理", "versions", "instances", "管理已安装版本与启动配置"),
+            ("资源管理", "content", "content", "Mod / 资源包 / 光影"),
+            ("设置", "settings", "settings", "Java、主题与下载选项"),
         )
-        for index, (label, page, hint) in enumerate(entries):
-            tile = QuickTile(page, label, hint, quick)
+        for index, (label, page, icon_name, hint) in enumerate(entries):
+            tile = QuickTile(icon_name, label, hint, quick)
             tile.clicked.connect(lambda target=page: self._navigate(target))
             grid.addWidget(tile, index // 2, index % 2)
         quick.add_layout(grid)

@@ -337,6 +337,14 @@ class MainWindow(QMainWindow):
         )
         for button in self.sidebar.buttons.values():
             button.update()
+        # 字号变化后标题栏按内容重新定高，避免两行标题被裁切。
+        # QSS 字体在事件循环里才完成 polish，所以再延迟一次修正。
+        self._sync_title_bar_height()
+        QTimer.singleShot(0, self._sync_title_bar_height)
+
+    def _sync_title_bar_height(self) -> None:
+        self.title_bar.refit()
+        self.title_bar.setFixedHeight(max(56, self.title_bar.minimumSizeHint().height()))
 
     # ---------- 日志窗口 ----------
     def show_log_window(self, runner=None) -> None:

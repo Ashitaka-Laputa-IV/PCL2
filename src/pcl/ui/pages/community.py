@@ -199,13 +199,26 @@ class CommunityBrowser(QWidget):
         detail.add(version_label)
         self._version_combo = QComboBox(detail)
         self._version_combo.setEnabled(False)
+        self._version_combo.currentIndexChanged.connect(lambda _index: self._update_auto_hint())
         detail.add(self._version_combo)
 
-        target_label = QLabel("安装到版本", detail)
+        self._target_box = QWidget(detail)
+        target_layout = QVBoxLayout(self._target_box)
+        target_layout.setContentsMargins(0, 0, 0, 0)
+        target_layout.setSpacing(4)
+        target_label = QLabel("安装到版本", self._target_box)
         target_label.setObjectName("Muted")
-        detail.add(target_label)
-        self._target_combo = QComboBox(detail)
-        detail.add(self._target_combo)
+        self._target_combo = QComboBox(self._target_box)
+        target_layout.addWidget(target_label)
+        target_layout.addWidget(self._target_combo)
+        detail.add(self._target_box)
+
+        # 整合包不需要选目标：游戏本体与加载器按包内声明自动安装
+        self._auto_hint = QLabel("", detail)
+        self._auto_hint.setObjectName("Muted")
+        self._auto_hint.setWordWrap(True)
+        self._auto_hint.setVisible(False)
+        detail.add(self._auto_hint)
 
         self._install_button = AnimatedButton("安装到选中版本", detail, variant="primary", height=38)
         self._install_button.setEnabled(False)
@@ -346,7 +359,30 @@ class CommunityBrowser(QWidget):
         self._icon.setPixmap(_placeholder_icon(project.title, 56))
         if project.icon_url:
             self.images.get(project.icon_url, self._set_detail_icon)
+        self._apply_mode(project.project_type or self._current_project_type())
         self._load_versions(project)
+
+    def _apply_mode(self, project_type: str) -> None:
+        """整合包不需要选安装目标：游戏本体与加载器按包内声明自动安装。"""
+        is_modpack = project_type == "modpack"
+        self._target_box.setVisible(not is_modpack)
+        self._auto_hint.setVisible(is_modpack)
+        self._install_button.setText("下载并创建版本" if is_modpack else "安装到选中版本")
+        if is_modpack:
+            self._update_auto_hint()
+
+    def _update_auto_hint(self) -> None:
+        version = next((item for item in self._versions if item.id == self._version_combo.currentData()), None)
+        target = ""
+        if version is not None:
+            parts = list(version.game_versions[:1])
+            if version.loaders:
+                parts.append("/".join(loader.capitalize() for loader in version.loaders[:2]))
+            target = " · ".join(parts)
+        if target:
+            self._auto_hint.setText(f"将自动安装：{target}（按整合包声明）")
+        else:
+            self._auto_hint.setText("将按整合包声明自动安装游戏本体与加载器。")
 
     def _set_detail_icon(self, pixmap: QPixmap) -> None:
         self._icon.setPixmap(
@@ -370,13 +406,13 @@ class CommunityBrowser(QWidget):
             available = bool(self._versions)
             is_modpack = project_type == "modpack"
             self._version_combo.setEnabled(available)
+            self._apply_mode(project_type)
             self._target_combo.setEnabled(not is_modpack)
-            self._install_button.setText("下载并创建版本" if is_modpack else "安装到选中版本")
             self._install_button.setEnabled(available and (is_modpack or self._target_combo.count() > 0))
             if not available:
                 self._status.setText("没有匹配当前筛选条件的版本，试试放宽版本或加载器。")
             elif is_modpack:
-                self._status.setText(f"共 {len(self._versions)} 个版本可选，整合包会下载并自动创建版本。")
+                self._status.setText(f"共 {len(self._versions)} 个版本可选，下载后会自动安装对应的游戏版本与加载器。")
             else:
                 self._status.setText(f"共 {len(self._versions)} 个版本可选。")
 
@@ -400,7 +436,7 @@ class CommunityBrowser(QWidget):
             return
         self._install_button.set_loading(True, "下载中…")
         self._install_button.setEnabled(False)
-        self._status.setText("正在下载整合包…")
+        self._status.setText(f"正在下载整合包…{self._auto_hint.text()}")
         filename = file.filename or f"{project.title}.mrpack"
         destination = self.context.paths.cache / "modpacks" / filename
 

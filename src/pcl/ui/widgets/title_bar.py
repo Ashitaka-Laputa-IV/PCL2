@@ -2,9 +2,42 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPoint, QRectF, Qt, Signal
+from PySide6.QtCore import QPoint, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget
+
+
+class _ElidedLabel(QLabel):
+    """按可用宽度省略显示的标签：字体放大时不会把标题栏顶宽。"""
+
+    def __init__(self, text: str = "", parent: QWidget | None = None) -> None:
+        super().__init__(text, parent)
+        self._full_text = text
+        self.setToolTip(text)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+
+    def setText(self, text: str) -> None:  # noqa: N802 - 与 QLabel API 保持一致
+        self._full_text = text
+        self.setToolTip(text)
+        self._apply_elide()
+
+    def full_text(self) -> str:
+        return self._full_text
+
+    def sizeHint(self):  # noqa: N802 - 按完整文本计算，避免省略后反复缩窄
+        height = self.fontMetrics().height()
+        return QSize(self.fontMetrics().horizontalAdvance(self._full_text) + 4, height)
+
+    def minimumSizeHint(self):  # noqa: N802 - 允许被压缩到 0，由省略号兜底
+        return QSize(0, self.fontMetrics().height())
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._apply_elide()
+
+    def _apply_elide(self) -> None:
+        available = max(0, self.contentsRect().width())
+        super().setText(self.fontMetrics().elidedText(self._full_text, Qt.TextElideMode.ElideRight, available))
 
 
 class _Mark(QWidget):
@@ -62,7 +95,9 @@ class TitleBar(QWidget):
     def __init__(self, parent: QWidget | None = None, *, title: str = "PCL2", subtitle: str = "") -> None:
         super().__init__(parent)
         self.setObjectName("TitleBar")
-        self.setFixedHeight(56)
+        # 高度随字号放大，避免两行标题被裁切
+        self.setMinimumHeight(56)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
         self._drag_offset: QPoint | None = None
 
         layout = QHBoxLayout(self)
@@ -73,9 +108,9 @@ class TitleBar(QWidget):
         texts = QVBoxLayout()
         texts.setContentsMargins(0, 0, 0, 0)
         texts.setSpacing(0)
-        self._title = QLabel(title, self)
+        self._title = _ElidedLabel(title, self)
         self._title.setObjectName("TitleBarText")
-        self._subtitle = QLabel(subtitle, self)
+        self._subtitle = _ElidedLabel(subtitle, self)
         self._subtitle.setObjectName("TitleBarSubtitle")
         self._subtitle.setVisible(bool(subtitle))
         texts.addWidget(self._title)
@@ -102,6 +137,14 @@ class TitleBar(QWidget):
         painter.end()
 
     # ---------- 文本 ----------
+    def refit(self) -> None:
+        """字号变化后重新按内容排布，避免标签沿用旧宽度被省略。"""
+        layout = self.layout()
+        if layout is not None:
+            layout.invalidate()
+            layout.activate()
+        self.updateGeometry()
+
     def set_title(self, title: str) -> None:
         self._title.setText(title)
 
