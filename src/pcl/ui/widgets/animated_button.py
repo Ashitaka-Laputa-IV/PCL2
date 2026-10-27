@@ -161,8 +161,8 @@ class AnimatedButton(QPushButton):
         danger = QColor("#EF4444")
 
         if self._circular and self.isEnabled():
-            glow = QRadialGradient(rect.center(), rect.width() * 0.72)
-            glow.setColorAt(0.0, QColor(255, 255, 255, 90))
+            glow = QRadialGradient(rect.center(), rect.width() * 0.62)
+            glow.setColorAt(0.0, QColor(255, 255, 255, 55))
             glow.setColorAt(1.0, QColor(255, 255, 255, 0))
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(glow)
