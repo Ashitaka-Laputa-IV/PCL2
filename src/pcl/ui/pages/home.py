@@ -371,6 +371,7 @@ class HomePage(BasePage):
 
     # ---------- 数据刷新 ----------
     def refresh(self) -> None:
+        self.context.sync_installed_versions()
         self._refresh_choices()
         self._refresh_java_tag()
 

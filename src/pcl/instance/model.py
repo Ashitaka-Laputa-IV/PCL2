@@ -45,6 +45,7 @@ class Instance:
     game_args: list[str] = field(default_factory=list)
     icon: str = ""
     icon_path: str = ""  # 自定义图标文件（实例目录内）
+    auto_version: bool = False  # 由已安装版本自动登记（删除时记住不再重建）
     server: str = ""  # 启动后自动进入的服务器（ip 或 ip:port）
     notes: str = ""
     created_at: float = field(default_factory=time.time)
@@ -96,6 +97,7 @@ class Instance:
             "game_args": list(self.game_args),
             "icon": self.icon,
             "icon_path": self.icon_path,
+            "auto_version": self.auto_version,
             "server": self.server,
             "notes": self.notes,
             "created_at": self.created_at,
@@ -137,6 +139,7 @@ class Instance:
             game_args=_str_list(data.get("game_args")),
             icon=str(data.get("icon", "")),
             icon_path=str(data.get("icon_path", "")),
+            auto_version=bool(data.get("auto_version", False)),
             server=str(data.get("server", "")),
             notes=str(data.get("notes", "")),
             created_at=_float(data.get("created_at", time.time()), time.time()),

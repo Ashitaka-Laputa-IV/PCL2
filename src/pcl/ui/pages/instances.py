@@ -226,6 +226,7 @@ class InstancesPage(BasePage):
 
     # ---------- 刷新 ----------
     def refresh(self) -> None:
+        self.context.sync_installed_versions()
         self._rebuild()
 
     def _on_search(self, text: str) -> None:
@@ -317,22 +318,26 @@ class InstancesPage(BasePage):
         self._rebuild()
 
     def delete_instance(self, instance: Instance) -> None:
-        if not confirm(
-            self,
-            "删除实例",
-            f"确定要删除「{instance.name}」吗？实例目录与其中的 Mod / 存档将一并删除。",
-            ok_text="删除",
-            danger=True,
-        ):
+        if instance.auto_version:
+            message = (
+                f"「{instance.name}」是根据已安装版本自动登记的。\n"
+                "删除后仅从列表移除，不会删除 versions 中的游戏文件；下次不再自动出现。"
+            )
+        else:
+            message = f"确定要删除「{instance.name}」吗？实例目录与其中的 Mod / 存档将一并删除。"
+        if not confirm(self, "删除实例", message, ok_text="删除", danger=True):
             return
         try:
             self.context.instances.delete(instance.id)
         except Exception as error:
             show_toast(self, friendly_message(error), "error")
             return
-        if self.context.config.selected_instance == instance.id:
-            self.context.config.selected_instance = ""
-            self.context.save_config()
+        config = self.context.config
+        if instance.auto_version and instance.version_id not in config.advanced.ignored_versions:
+            config.advanced.ignored_versions.append(instance.version_id)
+        if config.selected_instance == instance.id:
+            config.selected_instance = ""
+        self.context.save_config()
         show_toast(self, "实例已删除", "success")
         self._rebuild()
 

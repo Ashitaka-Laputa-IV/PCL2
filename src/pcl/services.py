@@ -69,6 +69,14 @@ class AppContext:
     def save_config(self) -> None:
         save_config(self.config, self.paths.config_file)
 
+    def sync_installed_versions(self) -> list:
+        """把共享目录中新安装、尚未登记的版本补成实例。"""
+        try:
+            return self.instances.sync_installed(self.config.advanced.ignored_versions)
+        except Exception as error:  # noqa: BLE001 - 扫描失败不应阻塞界面
+            log.warning("扫描已安装版本失败：%s", error)
+            return []
+
     def client(self) -> httpx.Client:
         with self._lock:
             if self._client is None:

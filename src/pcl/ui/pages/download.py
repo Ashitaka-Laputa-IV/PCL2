@@ -485,11 +485,14 @@ class DownloadPage(BasePage):
 
         def done(report) -> None:
             self._busy = False
+            self._forget_ignored_version(version_id)
             self._install_button.set_loading(False, "重新安装")
             self._install_button.setEnabled(True)
             self._status.setText(f"{version_id} 安装完成（{report.task_count} 个文件）")
             if self._create_instance_check.isChecked():
-                self._create_instance_for(version_id, version_id, "vanilla", "")
+                self._create_instance_for(f"{version_id} 原版", version_id, "vanilla", "", version_id)
+            else:
+                self.context.sync_installed_versions()
             show_toast(self, f"{version_id} 安装完成", "success")
             self._refresh_version_list()
 
@@ -508,7 +511,14 @@ class DownloadPage(BasePage):
             on_error=failed,
         )
 
+    def _forget_ignored_version(self, version_id: str) -> None:
+        ignored = self.context.config.advanced.ignored_versions
+        if version_id in ignored:
+            ignored.remove(version_id)
+            self.context.save_config()
+
     def _create_instance_for(self, name: str, mc_version: str, loader: str, loader_version: str, version_id: str = "") -> None:
+        self._forget_ignored_version(version_id or mc_version)
         try:
             instance = self.context.instances.create(
                 f"{name}",

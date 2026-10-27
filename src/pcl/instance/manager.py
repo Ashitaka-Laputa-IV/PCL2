@@ -173,6 +173,60 @@ class InstanceManager:
             (directory / "instance.json").unlink(missing_ok=True)
         log.info("已删除实例 %s", instance.name)
 
+    # ---------- 已安装版本登记 ----------
+    def sync_installed(self, ignored: Iterable[str] = ()) -> list[Instance]:
+        """把共享目录下已安装、但还没有实例的版本登记为实例。
+
+        ``ignored`` 用于记住用户主动删除的自动实例，避免下次刷新又出现。
+        """
+        game_root = self.paths.game
+        versions = self.detect_versions(game_root)
+        if not versions:
+            return []
+        existing = self.list_instances()
+        covered = {item.version_id for item in existing if not item.game_root}
+        ignored_set = {str(value) for value in ignored}
+        taken_names = {item.name for item in existing}
+        created: list[Instance] = []
+        for version_id in versions:
+            if version_id in covered or version_id in ignored_set:
+                continue
+            document = self._read_version(game_root, version_id)
+            if document is None:
+                continue
+            jar = game_root / "versions" / version_id / f"{version_id}.jar"
+            if not jar.is_file() and not document.get("inheritsFrom"):
+                continue
+            mc_version, loader, loader_version = self._describe_version(game_root, version_id)
+            name = self._auto_instance_name(mc_version, loader, loader_version)
+            base = name
+            counter = 2
+            while name in taken_names:
+                name = f"{base} ({counter})"
+                counter += 1
+            taken_names.add(name)
+            instance = self.create(
+                name,
+                mc_version,
+                version_id=version_id,
+                loader=loader,
+                loader_version=loader_version,
+                isolated=False,
+            )
+            instance.auto_version = True
+            self.save(instance)
+            created.append(instance)
+        if created:
+            log.info("自动登记 %d 个已安装版本", len(created))
+        return created
+
+    @staticmethod
+    def _auto_instance_name(mc_version: str, loader: str, loader_version: str) -> str:
+        if not loader or loader == "vanilla":
+            return f"{mc_version} 原版"
+        suffix = f"{loader.capitalize()} {loader_version}".strip()
+        return f"{mc_version} {suffix}"
+
     # ---------- 导入 ----------
     def detect_versions(self, game_root: Path) -> list[str]:
         """列出某个 .minecraft 下已安装的版本 id。"""
@@ -220,12 +274,19 @@ class InstanceManager:
         return sorted(items)[-1]
 
     @staticmethod
-    def _describe_version(game_root: Path, version_id: str) -> tuple[str, str, str]:
-        """从版本 JSON 推断 MC 版本与加载器。"""
+    def _read_version(game_root: Path, version_id: str) -> dict | None:
         path = game_root / "versions" / version_id / f"{version_id}.json"
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
+            return None
+        return data if isinstance(data, dict) else None
+
+    @staticmethod
+    def _describe_version(game_root: Path, version_id: str) -> tuple[str, str, str]:
+        """从版本 JSON 推断 MC 版本与加载器。"""
+        data = InstanceManager._read_version(game_root, version_id)
+        if data is None:
             return version_id, "vanilla", ""
 
         if not isinstance(data, dict):

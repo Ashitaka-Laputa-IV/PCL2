@@ -82,6 +82,7 @@ class AdvancedOptions:
     curseforge_api_key: str = ""
     auto_analyze_crash: bool = True
     keep_old_logs: bool = True
+    ignored_versions: list[str] = field(default_factory=list)
 
 
 @dataclass
