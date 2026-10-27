@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPaintEvent, QPainterPath, QPixmap
+from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPaintEvent, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QGridLayout,
@@ -29,14 +29,26 @@ class QuickTile(Card):
 
     clicked = Signal()
 
-    def __init__(self, icon_name: str, title: str, subtitle: str, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        icon_name: str,
+        title: str,
+        subtitle: str,
+        parent: QWidget | None = None,
+        *,
+        avatar_text: str = "",
+        avatar_color: QColor | None = None,
+    ) -> None:
         super().__init__(parent, hover_lift=True, padding=12, spacing=0)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         row = QHBoxLayout()
         row.setSpacing(11)
         badge = QLabel(self)
         badge.setFixedSize(40, 40)
-        badge.setPixmap(_badge_pixmap(icon_name, self.palette().highlight().color(), 40))
+        if avatar_text:
+            badge.setPixmap(_avatar_pixmap(avatar_text, avatar_color or self.palette().highlight().color(), 40))
+        else:
+            badge.setPixmap(_badge_pixmap(icon_name, self.palette().highlight().color(), 40))
         row.addWidget(badge)
         texts = QVBoxLayout()
         texts.setSpacing(1)
@@ -55,6 +67,32 @@ class QuickTile(Card):
         if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
             self.clicked.emit()
         super().mouseReleaseEvent(event)
+
+
+def _avatar_pixmap(text: str, accent: QColor, size: int = 40) -> QPixmap:
+    dpr = 2
+    pixmap = QPixmap(size * dpr, size * dpr)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    rect = QRectF(0, 0, size * dpr, size * dpr)
+    path = QPainterPath()
+    path.addRoundedRect(rect, 12 * dpr, 12 * dpr)
+    from PySide6.QtGui import QLinearGradient
+
+    gradient = QLinearGradient(rect.topLeft(), rect.bottomRight())
+    gradient.setColorAt(0.0, QColor(accent).lighter(112))
+    gradient.setColorAt(1.0, QColor(accent).darker(118))
+    painter.fillPath(path, gradient)
+    painter.setPen(QColor("#FFFFFF"))
+    font = QFont()
+    font.setWeight(QFont.Weight.Bold)
+    font.setPixelSize(int(size * dpr * 0.5))
+    painter.setFont(font)
+    painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, (text or "?")[:1].upper())
+    painter.end()
+    pixmap.setDevicePixelRatio(dpr)
+    return pixmap
 
 
 def _badge_pixmap(name: str, accent: QColor, size: int = 40) -> QPixmap:
@@ -84,7 +122,7 @@ class LaunchDial(QWidget):
         super().__init__(parent)
         self.setFixedSize(156, 156)
         self.ring = RingProgress(self, diameter=156, thickness=7)
-        self.ring.set_track_color(QColor(255, 255, 255, 60))
+        self.ring.set_track_color(QColor(255, 255, 255, 34))
         self.ring.move(0, 0)
         self.button = AnimatedButton("启动", self, variant="hero", icon_name="play", radius=46)
         self.button.setFixedSize(96, 96)
@@ -120,6 +158,11 @@ class HeroCard(QWidget):
         painter.drawEllipse(rect.width() - 220, -90, 320, 320)
         painter.setBrush(QColor(255, 255, 255, 12))
         painter.drawEllipse(-70, rect.height() - 110, 240, 240)
+        mark = icons.pixmap("logo", "#FFFFFF", 230)
+        if not mark.isNull():
+            painter.setOpacity(0.10)
+            painter.drawPixmap(int(rect.right() - 250), int(rect.center().y() - 115), mark)
+            painter.setOpacity(1.0)
         painter.end()
 
 
@@ -207,8 +250,8 @@ class HomePage(BasePage):
         self._detail_button = QPushButton("查看实例详情 →", self._hero)
         self._detail_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self._detail_button.setStyleSheet(
-            "QPushButton { background: transparent; border: none; padding: 0;"
-            " color: rgba(255,255,255,0.88); font-size: 12px; text-align: left; }"
+            "QPushButton { background: rgba(255,255,255,0.16); border: none; padding: 5px 12px;"
+            " color: #FFFFFF; font-size: 12px; border-radius: 9px; }"
             "QPushButton:hover { color: #FFFFFF; }"
         )
         self._detail_button.setVisible(False)
@@ -282,7 +325,22 @@ class HomePage(BasePage):
             subtitle = instance.mc_version
             if instance.loader != "vanilla":
                 subtitle += f" · {instance.loader.capitalize()}"
-            tile = QuickTile("instances", instance.name, subtitle, self)
+            color = QColor(
+                {
+                    "fabric": "#D9A24B",
+                    "quilt": "#A855F7",
+                    "forge": "#64748B",
+                    "neoforge": "#F97316",
+                }.get(instance.loader, "#22C55E")
+            )
+            tile = QuickTile(
+                "instances",
+                instance.name,
+                subtitle,
+                self,
+                avatar_text=instance.name,
+                avatar_color=color,
+            )
             tile.clicked.connect(lambda target=instance.id: self._open_instance(target))
             self._recent_box.addWidget(tile)
 

@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from pcl import __version__
 from pcl.core.errors import friendly_message
 from pcl.core.logging import get_logger
 from pcl.services import AppContext
@@ -55,44 +56,44 @@ class NavButton(QAbstractButton):
         self.icon_name = name
         self.label = label
         self.setCheckable(True)
-        self.setFixedSize(44, 44)
+        self.setFixedSize(60, 58)
         self.setToolTip(label)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
     def paintEvent(self, event) -> None:  # noqa: N802
+        from PySide6.QtGui import QFont
+
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         accent = self.palette().highlight().color()
-        rect = self.rect().adjusted(4, 4, -4, -4)
+        rect = self.rect().adjusted(6, 4, -6, -4)
 
-        if self.isChecked():
+        if self.isChecked() or self.underMouse():
             background = QColor(accent)
-            background.setAlpha(28)
+            background.setAlpha(30 if self.isChecked() else 14)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(background)
-            painter.drawRoundedRect(rect, 11, 11)
-        elif self.underMouse():
-            background = QColor(accent)
-            background.setAlpha(14)
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(background)
-            painter.drawRoundedRect(rect, 11, 11)
+            painter.drawRoundedRect(rect, 13, 13)
 
         color = accent if self.isChecked() else QColor("#7C8899")
         pixmap = icons.pixmap(self.icon_name, color.name(), 22)
         if not pixmap.isNull():
             painter.drawPixmap(
-                int(rect.center().x() - 11),
-                int(rect.center().y() - 11),
+                int(rect.center().x() - pixmap.width() / 2),
+                rect.top() + 8,
                 pixmap,
             )
 
-        if self.isChecked():
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(accent)
-            indicator = QPainterPath()
-            indicator.addRoundedRect(0.0, 8.0, 3.0, self.height() - 16.0, 1.5, 1.5)
-            painter.fillPath(indicator, accent)
+        font = QFont(self.font())
+        font.setPixelSize(10)
+        font.setWeight(QFont.Weight.DemiBold if self.isChecked() else QFont.Weight.Normal)
+        painter.setFont(font)
+        painter.setPen(accent if self.isChecked() else QColor("#8A96A8"))
+        painter.drawText(
+            rect.adjusted(0, 36, 0, 0),
+            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
+            self.label,
+        )
         painter.end()
 
 
@@ -102,7 +103,7 @@ class Sidebar(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("Sidebar")
-        self.setFixedWidth(68)
+        self.setFixedWidth(84)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 18, 6, 18)
@@ -113,6 +114,10 @@ class Sidebar(QWidget):
             self.buttons[key] = button
             layout.addWidget(button, 0, Qt.AlignmentFlag.AlignHCenter)
         layout.addStretch(1)
+        version = QLabel(f"v{__version__}", self)
+        version.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        version.setStyleSheet("color: #A8B3C4; font-size: 10px;")
+        layout.addWidget(version)
 
     def set_active(self, key: str) -> None:
         for name, button in self.buttons.items():

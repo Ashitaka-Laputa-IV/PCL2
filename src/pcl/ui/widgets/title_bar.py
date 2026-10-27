@@ -93,6 +93,14 @@ class TitleBar(QWidget):
         self._maximize.clicked.connect(self.toggle_maximize)
         self._close.clicked.connect(lambda: self.window().close())
 
+    def paintEvent(self, event) -> None:  # noqa: N802
+        super().paintEvent(event)
+        painter = QPainter(self)
+        line = QColor(self.palette().mid().color())
+        line.setAlpha(38)
+        painter.fillRect(0, self.height() - 1, self.width(), 1, line)
+        painter.end()
+
     # ---------- 文本 ----------
     def set_title(self, title: str) -> None:
         self._title.setText(title)
