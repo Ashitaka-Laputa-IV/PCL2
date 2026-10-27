@@ -51,6 +51,7 @@ QLabel#PageTitle { font-size: %FONT_SIZE_TITLE%; font-weight: 700; color: %TEXT%
 QLabel#PageSubtitle { color: %TEXT_MUTED%; font-size: %FONT_SIZE%; }
 QLabel#SectionTitle { font-size: %FONT_SIZE_LARGE%; font-weight: 600; }
 QLabel#Muted { color: %TEXT_MUTED%; font-size: %FONT_SIZE_SMALL%; }
+QLabel#Warning { color: %WARNING_TEXT%; }
 QLabel#Tag {
     background: %ACCENT_SOFT%; color: %ACCENT%;
     border-radius: 9px; padding: 3px 10px;

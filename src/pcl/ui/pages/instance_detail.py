@@ -306,9 +306,9 @@ class InstanceDetailPage(BasePage):
         layout.setSpacing(8)
 
         banner = QLabel("", page)
+        banner.setObjectName("Warning")
         banner.setWordWrap(True)
         banner.setVisible(False)
-        banner.setStyleSheet("color: #B45309;")
         layout.addWidget(banner)
 
         tools = QWidget(page)

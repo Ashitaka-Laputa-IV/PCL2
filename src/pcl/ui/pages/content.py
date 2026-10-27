@@ -231,6 +231,7 @@ class ContentPage(BasePage):
 
         self._banner = Card(self, padding=12, spacing=0, object_name="CardFlat")
         self._banner_label = QLabel("", self._banner)
+        self._banner_label.setObjectName("Warning")
         self._banner_label.setWordWrap(True)
         self._banner.add(self._banner_label)
         self._banner.setVisible(False)
@@ -353,7 +354,6 @@ class ContentPage(BasePage):
         for name, dependency in report.breaks[:5]:
             details.append(f"{name} 与 {dependency.label} 互斥")
         self._banner_label.setText(f"⚠ {report.summary()}\n" + "\n".join(details[:6]))
-        self._banner_label.setStyleSheet("color: #B45309;")
         self._banner.setVisible(True)
 
     def _on_tab_changed(self, _index: int) -> None:

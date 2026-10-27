@@ -12,12 +12,13 @@
 | 实例管理 | 新建 / 复制 / 重命名 / 删除实例、版本隔离目录、导入已有 `.minecraft`、导出整合包 |
 | 一键装 Java | Adoptium Temurin JRE 自动下载解压到启动器目录，可指定 8/11/17/21/25 |
 | 离线启动 | 仅离线登录（离线 UUID 与 Java 版 `UUID.nameUUIDFromBytes` 完全一致）、Java 自动扫描与按版本挑选、内存 / 窗口 / JVM / 游戏参数、`natives` 解压、实时日志与结束进程 |
-| 资源管理 | Mod（`fabric.mod.json` / `META-INF/mods.toml` / `mcmod.info`）、资源包（`pack.mcmeta`）、光影（`shaders/`）扫描；`.disabled` 启停；拖入安装；基于元数据的依赖缺失 / 重复 / 版本不匹配检查 |
+| 资源管理 | Mod（`fabric.mod.json` / `META-INF/mods.toml` / `mcmod.info`）、资源包（`pack.mcmeta`）、光影（`shaders/`）扫描；`.disabled` 启停 / 批量启停与删除；拖入安装；基于元数据的依赖缺失 / 重复 / 版本不匹配检查；Modrinth 指纹比对显示可更新版本并一键替换 |
 | 整合包 | Modrinth（`.mrpack`）、CurseForge（zip + `manifest.json`）、HMCL（`modpack.json`）、PCL（`PCL/Setup.ini`）导入；导出为 HMCL / PCL 包，Modrinth 导出为尽力而为模式 |
 | 下载引擎 | 并发线程池、按目标路径去重、镜像回退（BMCLAPI）、限速、取消、失败重试、按字节聚合的进度与速度 |
 | 社区资源 | Modrinth 搜索与下载 |
 | 实例详情 | 概览 / 设置 / 内容 / 存档 / 服务器 |
 | 崩溃分析 | 规则匹配 crash-report 与日志 |
+| 配置备份 | 设置页导出 / 导入 `config.json`，恢复启动、界面、下载与高级选项 |
 | 界面 | 无边框窗口 + 自绘标题栏、左侧图标导航、卡片式布局、页面淡入动画、亮 / 暗主题与 8 种主题色、圆角与阴影、轻提示与冲突横幅 |
 
 ## 运行环境
@@ -67,7 +68,7 @@ src/pcl/
 │   └── loaders/ # Fabric / Quilt profile 安装，Forge / NeoForge processors 链
 ├── launch/      # Java 扫描、参数拼装、离线账户、进程运行
 ├── instance/    # 实例模型与 CRUD
-├── content/     # Mod / 资源包 / 光影解析与冲突检查
+├── content/     # Mod / 资源包 / 光影解析、冲突检查与 Modrinth 更新检测
 ├── modpack/     # 四种整合包解析与导出
 ├── ui/          # 主窗口、页面、自绘控件、弹层、workers
 └── resources/   # QSS 模板与 SVG 图标
