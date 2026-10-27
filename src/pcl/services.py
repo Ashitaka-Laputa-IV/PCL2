@@ -70,6 +70,7 @@ class AppContext:
         """把旧版实例条目迁移成版本条目，并接续上次选择的版本。"""
         try:
             self.versions.migrate_legacy()
+            self.versions.normalize_layout()
             self.versions.upgrade_isolation()
         except Exception as error:  # noqa: BLE001 - 迁移失败不应阻塞启动
             log.warning("迁移旧实例数据失败：%s", error)

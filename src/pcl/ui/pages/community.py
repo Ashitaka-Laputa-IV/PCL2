@@ -526,6 +526,10 @@ class CommunityBrowser(QWidget):
                 message += f"，{len(result.failed)} 个失败"
             self._status.setText(message)
             show_toast(self, message, "success" if not result.failed else "warning")
+            # 直接进入新版本的详情页：避免用户以为还在原版条目上，也方便确认 Mod 已装好
+            window = self.window()
+            if hasattr(window, "open_version_detail"):
+                window.open_version_detail(result.version.id)
 
         def failed(message: str) -> None:
             self._install_button.set_loading(False, "下载并创建版本")

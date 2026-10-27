@@ -332,6 +332,35 @@ class VersionStore:
         except OSError as error:
             log.warning("迁移共享游戏文件失败：%s", error)
 
+    def normalize_layout(self) -> list[LocalVersion]:
+        """把旧版 ``versions/<id>/.minecraft`` 的游戏目录整理为版本目录直挂。"""
+        changed: list[LocalVersion] = []
+        for version in self.list_versions():
+            if not version.game_root:
+                continue
+            legacy = self.paths.version_dir(version.id) / ".minecraft"
+            if Path(version.game_root).expanduser() != legacy or not legacy.is_dir():
+                continue
+            base = self.paths.version_dir(version.id)
+            try:
+                for child in list(legacy.iterdir()):
+                    target = base / child.name
+                    if target.exists():
+                        continue
+                    shutil.move(str(child), str(target))
+                legacy.rmdir()
+            except OSError as error:
+                log.warning("整理版本目录失败 %s: %s", legacy, error)
+                continue
+            version.game_root = ""
+            version.isolated = True
+            self.save(version)
+            self._prepare_game_dir(version)
+            changed.append(version)
+        if changed:
+            log.info("已整理 %d 个旧布局版本的游戏目录", len(changed))
+        return changed
+
     # ---------- 名称 ----------
     @staticmethod
     def _unique_name(base: str, taken: Iterable[str]) -> str:
@@ -377,13 +406,10 @@ class VersionStore:
         migrated: list[LocalVersion] = []
 
         for directory in sorted(legacy_root.iterdir()):
-            meta_file = None
-            for name in ("instance.json", "instance.json.migrated"):
-                candidate = directory / name
-                if candidate.is_file():
-                    meta_file = candidate
-                    break
-            if meta_file is None:
+            # 只迁移真正的 instance.json；已处理过的 .migrated 不再重复迁移，
+            # 否则会每次启动都派生出新的 -1 副本。
+            meta_file = directory / "instance.json"
+            if not meta_file.is_file():
                 continue
             try:
                 data = json.loads(meta_file.read_text(encoding="utf-8"))

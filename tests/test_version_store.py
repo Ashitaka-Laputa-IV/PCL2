@@ -110,6 +110,35 @@ def test_upgrade_isolation_moves_shared_content(paths) -> None:
     assert store.upgrade_isolation() == []
 
 
+def test_normalize_legacy_layout(paths) -> None:
+    _write_version(paths.game, "1.20.1-forge-47.4.10", {"id": "1.20.1-forge-47.4.10", "inheritsFrom": "1.20.1"}, jar=False)
+    version_dir = paths.version_dir("1.20.1-forge-47.4.10")
+    legacy = version_dir / ".minecraft"
+    (legacy / "mods").mkdir(parents=True, exist_ok=True)
+    (legacy / "mods" / "demo.jar").write_bytes(b"mod")
+    (version_dir / "pcl.json").write_text(
+        json.dumps(
+            {
+                "id": "1.20.1-forge-47.4.10",
+                "name": "整合包版本",
+                "loader": "forge",
+                "isolated": True,
+                "game_root": str(legacy),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    store = VersionStore(paths)
+    changed = store.normalize_layout()
+    assert [item.id for item in changed] == ["1.20.1-forge-47.4.10"]
+    version = store.get("1.20.1-forge-47.4.10")
+    assert version.game_root == ""
+    assert version.game_dir(paths) == version_dir
+    assert (version_dir / "mods" / "demo.jar").is_file()
+    assert not legacy.exists()
+
+
 def test_rename_keeps_unique_names(paths) -> None:
     _write_version(paths.game, "1.20.1", {"id": "1.20.1"})
     _write_version(paths.game, "1.20.1-1", {"id": "1.20.1-1", "inheritsFrom": "1.20.1"}, jar=False)

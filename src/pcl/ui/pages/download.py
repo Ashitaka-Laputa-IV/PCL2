@@ -608,6 +608,9 @@ class DownloadPage(BasePage):
         dialog = ImportModpackDialog(self.context, self.tasks, self.bridge, self)
         if dialog.exec() == dialog.DialogCode.Accepted and dialog.result is not None:
             show_toast(self, f"已导入 {dialog.result.version.name}", "success")
+            window = self.window()
+            if hasattr(window, "open_version_detail"):
+                window.open_version_detail(dialog.result.version.id)
 
     # ---------- 进度 ----------
     def _on_progress(self, progress) -> None:

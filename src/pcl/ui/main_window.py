@@ -442,6 +442,8 @@ class MainWindow(QMainWindow):
             if dialog.exec() == dialog.DialogCode.Accepted:
                 show_toast(self, "整合包导入完成", "success")
                 self._refresh_pages(("versions", "home"))
+                if dialog.result is not None:
+                    self.open_version_detail(dialog.result.version.id)
 
         if others:
             version = self.context.current_version()
