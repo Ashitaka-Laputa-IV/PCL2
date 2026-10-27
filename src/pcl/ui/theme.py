@@ -34,16 +34,16 @@ LIGHT: dict[str, str] = {
 }
 
 DARK: dict[str, str] = {
-    "bg": "#151922",
-    "bg_alt": "#1B2029",
-    "surface": "#222936",
-    "surface_alt": "#2A3242",
+    "bg": "#10141B",
+    "bg_alt": "#171C25",
+    "surface": "#1E2531",
+    "surface_alt": "#262F3E",
     "surface_hover": "#2F3A4D",
     "text": "#EDF1F7",
     "text_muted": "#9BA7B8",
     "text_disabled": "#5F6B7C",
-    "border": "#333C4C",
-    "border_strong": "#414C5F",
+    "border": "#3A465B",
+    "border_strong": "#4B5970",
     "success": "#34D399",
     "warning": "#FBBF24",
     "danger": "#F87171",

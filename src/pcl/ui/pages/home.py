@@ -120,13 +120,13 @@ class LaunchDial(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setFixedSize(156, 156)
-        self.ring = RingProgress(self, diameter=156, thickness=7)
+        self.setFixedSize(168, 168)
+        self.ring = RingProgress(self, diameter=168, thickness=6)
         self.ring.set_track_color(QColor(255, 255, 255, 34))
         self.ring.move(0, 0)
-        self.button = AnimatedButton("启动", self, variant="hero", icon_name="play", radius=46)
-        self.button.setFixedSize(96, 96)
-        self.button.move(30, 30)
+        self.button = AnimatedButton("启动", self, variant="hero", icon_name="play", radius=56, circular=True)
+        self.button.setFixedSize(112, 112)
+        self.button.move(28, 28)
 
     def set_progress(self, value: float) -> None:
         self.ring.set_value(value)

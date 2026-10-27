@@ -22,6 +22,7 @@ from pcl.services import AppContext
 from pcl.ui.pages.base import BasePage
 from pcl.ui.widgets.animated_button import AnimatedButton
 from pcl.ui.widgets.card import Card
+from pcl.ui.widgets.section import SectionCard
 from pcl.ui.widgets.switch import ToggleSwitch
 from pcl.ui.widgets.toast import show_toast
 
@@ -121,6 +122,7 @@ class SettingsPage(BasePage):
 
     def _row(self, title: str, description: str, control: QWidget) -> QWidget:
         container = QWidget(self)
+        control.setParent(container)
         row = QHBoxLayout(container)
         row.setContentsMargins(0, 4, 0, 4)
         row.setSpacing(16)
@@ -144,15 +146,11 @@ class SettingsPage(BasePage):
         row.addWidget(wrapper, 2)
         return container
 
-    def _card(self, title: str) -> Card:
-        card = Card(self, padding=20, spacing=8)
-        heading = QLabel(title, card)
-        heading.setObjectName("SectionTitle")
-        card.add(heading)
-        return card
+    def _card(self, title: str, icon_name: str = "settings") -> SectionCard:
+        return SectionCard(title, icon_name, self)
 
     def _build_launch_card(self) -> Card:
-        card = self._card("启动")
+        card = self._card("启动", "play")
         self._java_combo = QComboBox(card)
         self._java_combo.setMinimumWidth(260)
         refresh = AnimatedButton("重新检测", card, variant="secondary", height=30)
@@ -201,7 +199,7 @@ class SettingsPage(BasePage):
         return card
 
     def _build_ui_card(self) -> Card:
-        card = self._card("界面")
+        card = self._card("界面", "settings")
         self._dark = ToggleSwitch(card)
         card.add(self._row("深色模式", "切换深色配色，立即生效", self._dark))
 
@@ -225,7 +223,7 @@ class SettingsPage(BasePage):
         return card
 
     def _build_download_card(self) -> Card:
-        card = self._card("下载")
+        card = self._card("下载", "download")
         self._source = QComboBox(card)
         self._source.addItem("自动选择（镜像优先）", "auto")
         self._source.addItem("官方源", "official")
@@ -251,7 +249,7 @@ class SettingsPage(BasePage):
         return card
 
     def _build_advanced_card(self) -> Card:
-        card = self._card("高级")
+        card = self._card("高级", "more")
         self._game_root = QLineEdit(card)
         self._game_root.setPlaceholderText("留空使用数据目录下的 .minecraft")
         self._game_root.setMinimumWidth(300)

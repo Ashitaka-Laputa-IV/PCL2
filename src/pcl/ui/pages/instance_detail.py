@@ -35,6 +35,7 @@ from pcl.ui import icons
 from pcl.ui.dialogs.crash_report import show_crash_report
 from pcl.ui.pages.base import BasePage
 from pcl.ui.widgets.animated_button import AnimatedButton
+from pcl.ui.widgets.cover import Cover
 from pcl.ui.widgets.card import Card
 from pcl.ui.widgets.switch import ToggleSwitch
 from pcl.ui.widgets.toast import show_toast
@@ -81,33 +82,39 @@ class InstanceDetailPage(BasePage):
         outer.setContentsMargins(28, 20, 24, 16)
         outer.setSpacing(12)
 
-        header = QHBoxLayout()
-        header.setSpacing(12)
-        back = AnimatedButton("返回", self, variant="ghost", height=32)
+        back_row = QHBoxLayout()
+        back = AnimatedButton("← 返回", self, variant="ghost", height=28)
         back.clicked.connect(lambda: self.window().navigate("instances") if hasattr(self.window(), "navigate") else None)
-        header.addWidget(back)
+        back_row.addWidget(back)
+        back_row.addStretch(1)
+        outer.addLayout(back_row)
 
-        self._icon = QLabel(self)
-        self._icon.setFixedSize(56, 56)
+        self._cover = Cover(self)
+        header = QHBoxLayout(self._cover)
+        header.setContentsMargins(22, 18, 22, 18)
+        header.setSpacing(16)
+
+        self._icon = QLabel(self._cover)
+        self._icon.setFixedSize(64, 64)
         header.addWidget(self._icon)
 
         titles = QVBoxLayout()
-        titles.setSpacing(3)
-        self._name = QLabel("选择一个实例", self)
-        self._name.setStyleSheet("font-size: 22px; font-weight: 700;")
-        self._tags = QLabel("", self)
-        self._tags.setObjectName("Muted")
+        titles.setSpacing(4)
+        self._name = QLabel("选择一个实例", self._cover)
+        self._name.setStyleSheet("color: #FFFFFF; font-size: 22px; font-weight: 700;")
+        self._tags = QLabel("", self._cover)
+        self._tags.setStyleSheet("color: rgba(255,255,255,0.82); font-size: 12px;")
         titles.addWidget(self._name)
         titles.addWidget(self._tags)
         header.addLayout(titles, 1)
 
-        self._crash_button = AnimatedButton("崩溃分析", self, variant="secondary", height=34)
+        self._crash_button = AnimatedButton("崩溃分析", self._cover, variant="secondary", height=34)
         self._crash_button.clicked.connect(self._analyze_crash)
-        self._launch_button = AnimatedButton("启动", self, variant="primary", icon_name="play", height=38)
+        self._launch_button = AnimatedButton("启动", self._cover, variant="white", icon_name="play", height=38)
         self._launch_button.clicked.connect(self._launch)
         header.addWidget(self._crash_button)
         header.addWidget(self._launch_button)
-        outer.addLayout(header)
+        outer.addWidget(self._cover)
 
         self._tabs = QTabWidget(self)
         self._tabs.setDocumentMode(True)
@@ -278,6 +285,7 @@ class InstanceDetailPage(BasePage):
 
     def _row(self, label: str, control: QWidget) -> QWidget:
         row = QWidget(self)
+        control.setParent(row)
         layout = QHBoxLayout(row)
         layout.setContentsMargins(0, 2, 0, 2)
         layout.setSpacing(12)
@@ -384,10 +392,10 @@ class InstanceDetailPage(BasePage):
             pixmap = QPixmap(str(icon_path))
             if not pixmap.isNull():
                 self._icon.setPixmap(
-                    pixmap.scaled(56, 56, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+                    pixmap.scaled(64, 64, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
                 )
                 return
-        self._icon.setPixmap(_rounded_icon(instance.name, 56, self.palette().highlight().color()))
+        self._icon.setPixmap(_rounded_icon(instance.name, 64, self.palette().highlight().color().lighter(118)))
 
     def _load_overview(self) -> None:
         instance = self.instance

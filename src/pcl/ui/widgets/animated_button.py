@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QEasingCurve, QRectF, QSize, Qt, QTimer, QVariantAnimation
-from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QRadialGradient
 from PySide6.QtWidgets import QPushButton, QSizePolicy, QWidget
 
 from pcl.ui import icons
@@ -25,7 +25,7 @@ class AnimatedButton(QPushButton):
     ``variant`` 可选：``primary`` / ``secondary`` / ``ghost`` / ``danger`` / ``hero``。
     """
 
-    _VARIANTS = ("primary", "secondary", "ghost", "danger", "hero")
+    _VARIANTS = ("primary", "secondary", "ghost", "danger", "hero", "white")
 
     def __init__(
         self,
@@ -36,9 +36,11 @@ class AnimatedButton(QPushButton):
         icon_name: str = "",
         radius: int = 8,
         height: int | None = None,
+        circular: bool = False,
     ) -> None:
         super().__init__(text, parent)
         self._variant = variant if variant in self._VARIANTS else "secondary"
+        self._circular = circular
         self._icon_name = icon_name
         self._radius = radius
         self._hover = 0.0
@@ -69,6 +71,7 @@ class AnimatedButton(QPushButton):
     # ---------- 属性 ----------
     def set_variant(self, variant: str) -> None:
         self._variant = variant if variant in self._VARIANTS else "secondary"
+        self._circular = circular
         self.update()
 
     def set_icon_name(self, name: str) -> None:
@@ -150,12 +153,20 @@ class AnimatedButton(QPushButton):
 
         inset = 1.5 + self._press * 1.2
         rect = QRectF(self.rect()).adjusted(inset, inset, -inset, -inset)
-        radius = self._radius + (6 if self._variant == "hero" else 0)
+        radius = rect.width() / 2 if self._circular else self._radius + (6 if self._variant == "hero" else 0)
 
         accent = self.palette().highlight().color()
         text_color = self.palette().windowText().color()
         border_color = _mix(QColor("#D3D9E3"), accent, 0.0)
         danger = QColor("#EF4444")
+
+        if self._circular and self.isEnabled():
+            glow = QRadialGradient(rect.center(), rect.width() * 0.72)
+            glow.setColorAt(0.0, QColor(255, 255, 255, 90))
+            glow.setColorAt(1.0, QColor(255, 255, 255, 0))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(glow)
+            painter.drawEllipse(rect.adjusted(-14, -14, 14, 14))
 
         path = QPainterPath()
         path.addRoundedRect(rect, radius, radius)
@@ -173,6 +184,9 @@ class AnimatedButton(QPushButton):
             gradient.setColorAt(1.0, bottom)
             painter.fillPath(path, gradient)
             pen_color = QColor(255, 255, 255, 40)
+        elif self._variant == "white":
+            painter.fillPath(path, _mix(QColor("#FFFFFF"), QColor("#0F172A"), 0.04 * self._hover + 0.06 * self._press))
+            pen_color = QColor(255, 255, 255, 70)
         elif self._variant == "danger":
             fill = QColor(danger)
             fill.setAlpha(int(30 + 30 * self._hover))
@@ -196,7 +210,9 @@ class AnimatedButton(QPushButton):
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawPath(path)
 
-        if self._variant in ("primary", "hero", "danger"):
+        if self._variant == "white":
+            content_color = accent
+        elif self._variant in ("primary", "hero", "danger"):
             content_color = QColor("#FFFFFF") if self._variant != "danger" else danger
         else:
             content_color = text_color if self.isEnabled() else QColor("#A6AFBD")
@@ -210,7 +226,12 @@ class AnimatedButton(QPushButton):
             painter.drawRoundedRect(rect.adjusted(2, 2, -2, -2), radius, radius)
 
         icon_width = 0
-        if self._icon_name:
+        if self._icon_name and self._circular:
+            size = 30
+            pixmap = icons.pixmap(self._icon_name, content_color.name(), size)
+            if not pixmap.isNull():
+                painter.drawPixmap(int(rect.center().x() - size / 2), int(rect.center().y() - size - 2), pixmap)
+        elif self._icon_name:
             size = 30 if self._variant == "hero" else 18
             pixmap = icons.pixmap(self._icon_name, content_color.name(), size)
             if not pixmap.isNull():
@@ -244,7 +265,9 @@ class AnimatedButton(QPushButton):
         painter.setFont(font)
         painter.setPen(content_color)
         text_rect = rect.toRect()
-        if self._icon_name or self._loading:
+        if self._circular:
+            text_rect = text_rect.adjusted(0, 24, 0, 0)
+        elif self._icon_name or self._loading:
             text_rect = text_rect.adjusted(int(icon_width / 2) + (10 if self._loading else 0), 0, 0, 0)
         painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, self.text())
 
