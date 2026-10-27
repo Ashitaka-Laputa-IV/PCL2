@@ -27,3 +27,4 @@ accounts.json
 .vscode/
 *.swp
 .DS_Store
+.codebuddy/

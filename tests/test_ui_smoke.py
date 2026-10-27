@@ -47,7 +47,7 @@ def test_main_window_navigation(qapp, context) -> None:
     window.show()
     qapp.processEvents()
 
-    assert set(window.pages) == {"home", "instances", "download", "content", "settings"}
+    assert set(window.pages) == {"home", "instances", "download", "content", "settings", "more", "detail"}
     for key in ("instances", "download", "content", "settings", "home"):
         window.navigate(key)
         qapp.processEvents()

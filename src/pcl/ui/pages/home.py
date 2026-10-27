@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -101,6 +102,12 @@ class HomePage(BasePage):
         for widget in (self._instance_combo, self._account_combo):
             header.addWidget(widget)
 
+        account_button = AnimatedButton("", self, variant="ghost", icon_name="user", radius=8)
+        account_button.setFixedSize(36, 34)
+        account_button.setToolTip("账户管理")
+        account_button.clicked.connect(self._open_accounts)
+        header.addWidget(account_button)
+
         settings_button = AnimatedButton("", self, variant="ghost", icon_name="settings", radius=8)
         settings_button.setFixedSize(36, 34)
         settings_button.setToolTip("打开设置")
@@ -142,6 +149,17 @@ class HomePage(BasePage):
         tags.addStretch(1)
         info.addLayout(tags)
         info.addStretch(1)
+
+        self._detail_button = QPushButton("查看实例详情 →", self._hero)
+        self._detail_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._detail_button.setStyleSheet(
+            "QPushButton { background: transparent; border: none; padding: 0;"
+            " color: rgba(255,255,255,0.88); font-size: 12px; text-align: left; }"
+            "QPushButton:hover { color: #FFFFFF; }"
+        )
+        self._detail_button.setVisible(False)
+        self._detail_button.clicked.connect(self._open_detail)
+        info.addWidget(self._detail_button, 0, Qt.AlignmentFlag.AlignLeft)
 
         self._hint_label = QLabel("", self._hero)
         self._hint_label.setStyleSheet("color: rgba(255,255,255,0.72); font-size: 12px;")
@@ -202,6 +220,18 @@ class HomePage(BasePage):
         if hasattr(window, "navigate"):
             window.navigate(page)
 
+    def _open_detail(self) -> None:
+        instance = self.context.current_instance()
+        window = self.window()
+        if instance is not None and hasattr(window, "open_instance_detail"):
+            window.open_instance_detail(instance.id)
+
+    def _open_accounts(self) -> None:
+        from pcl.ui.dialogs.accounts import AccountsDialog
+
+        AccountsDialog(self.context, self).exec()
+        self._refresh_choices()
+
     # ---------- 数据刷新 ----------
     def refresh(self) -> None:
         self._refresh_choices()
@@ -241,9 +271,12 @@ class HomePage(BasePage):
             self._version_label.setText("先在「版本管理」中新建实例，或从下载页安装游戏")
             self._tag_loader.setText("未选择")
             self._hint_label.setText("")
+            self._detail_button.setVisible(False)
             if self._dial is not None:
                 self._dial.button.setEnabled(False)
             return
+
+        self._detail_button.setVisible(True)
 
         self._name_label.setText(instance.name)
         loader_label = instance.loader.capitalize() if instance.loader != "vanilla" else "原版"

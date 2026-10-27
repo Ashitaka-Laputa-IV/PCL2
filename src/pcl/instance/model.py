@@ -39,9 +39,13 @@ class Instance:
     game_root: str = ""  # 非空表示使用外部游戏目录（导入已有 .minecraft）
     java_path: str = ""
     memory_mb: int = 0  # 0 表示跟随全局设置
+    window_width: int = 0  # 0 表示跟随全局设置
+    window_height: int = 0
     jvm_args: list[str] = field(default_factory=list)
     game_args: list[str] = field(default_factory=list)
     icon: str = ""
+    icon_path: str = ""  # 自定义图标文件（实例目录内）
+    server: str = ""  # 启动后自动进入的服务器（ip 或 ip:port）
     notes: str = ""
     created_at: float = field(default_factory=time.time)
     last_played_at: float = 0.0
@@ -86,9 +90,13 @@ class Instance:
             "game_root": self.game_root,
             "java_path": self.java_path,
             "memory_mb": self.memory_mb,
+            "window_width": self.window_width,
+            "window_height": self.window_height,
             "jvm_args": list(self.jvm_args),
             "game_args": list(self.game_args),
             "icon": self.icon,
+            "icon_path": self.icon_path,
+            "server": self.server,
             "notes": self.notes,
             "created_at": self.created_at,
             "last_played_at": self.last_played_at,
@@ -123,9 +131,13 @@ class Instance:
             game_root=str(data.get("game_root", "")),
             java_path=str(data.get("java_path", "")),
             memory_mb=_int(data.get("memory_mb", 0)),
+            window_width=_int(data.get("window_width", 0)),
+            window_height=_int(data.get("window_height", 0)),
             jvm_args=_str_list(data.get("jvm_args")),
             game_args=_str_list(data.get("game_args")),
             icon=str(data.get("icon", "")),
+            icon_path=str(data.get("icon_path", "")),
+            server=str(data.get("server", "")),
             notes=str(data.get("notes", "")),
             created_at=_float(data.get("created_at", time.time()), time.time()),
             last_played_at=_float(data.get("last_played_at", 0)),

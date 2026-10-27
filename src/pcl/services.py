@@ -154,6 +154,10 @@ class AppContext:
         options = dataclasses.replace(self.config.launch)
         if instance.memory_mb > 0:
             options.memory_mb = instance.memory_mb
+        if instance.window_width > 0:
+            options.window_width = instance.window_width
+        if instance.window_height > 0:
+            options.window_height = instance.window_height
         if instance.jvm_args:
             options.jvm_args = [*options.jvm_args, *instance.jvm_args]
         if instance.game_args:
@@ -181,6 +185,14 @@ class AppContext:
         java = self.resolve_java(version_doc, instance)
         options = self.launch_options(instance)
 
+        extra_args: list[str] = []
+        if instance.server:
+            host, _, port = instance.server.rpartition(":")
+            if host and port.isdigit():
+                extra_args = ["--server", host, "--port", str(int(port))]
+            else:
+                extra_args = ["--server", instance.server, "--port", "25565"]
+
         plan = build_plan(
             self.paths,
             version_id,
@@ -189,6 +201,7 @@ class AppContext:
             java,
             game_dir=instance.game_dir(self.paths),
             version_doc=version_doc,
+            extra_game_args=extra_args,
         )
         runner = GameRunner(self.paths, plan, version_doc=version_doc)
         runner.start()
@@ -205,6 +218,21 @@ class AppContext:
 
     def is_game_running(self) -> bool:
         return self.runner is not None and self.runner.is_running
+
+    # ---------- 崩溃分析 ----------
+    def crash_report(self, instance: Instance | None = None):
+        """分析最近一次崩溃，返回 :class:`~pcl.launch.crash.CrashReport`。"""
+        from pcl.launch.crash import analyze_crash
+
+        instance = instance or self.current_instance()
+        if instance is None:
+            raise LaunchError("还没有任何实例。")
+        state = self.runner.state if self.runner is not None else None
+        return analyze_crash(
+            instance.game_dir(self.paths),
+            logs_dir=self.paths.logs,
+            exit_code=state.exit_code if state is not None else None,
+        )
 
     # ---------- 其他 ----------
     def version_installed(self, version_id: str) -> bool:

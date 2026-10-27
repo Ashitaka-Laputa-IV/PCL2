@@ -40,6 +40,10 @@ class LogWindow(QDialog):
         clear_button.clicked.connect(lambda: self._output.clear())
         header.addWidget(clear_button)
 
+        crash_button = AnimatedButton("崩溃分析", self, variant="secondary")
+        crash_button.clicked.connect(self._analyze_crash)
+        header.addWidget(crash_button)
+
         self._stop_button = AnimatedButton("结束游戏", self, variant="danger")
         self._stop_button.clicked.connect(self._stop_game)
         header.addWidget(self._stop_button)
@@ -101,6 +105,18 @@ class LogWindow(QDialog):
     def _stop_game(self) -> None:
         self.context.stop_game()
         self._title.setText("游戏日志 · 正在结束进程…")
+
+    def _analyze_crash(self) -> None:
+        from pcl.ui.dialogs.crash_report import show_crash_report
+
+        try:
+            report = self.context.crash_report()
+        except Exception as error:
+            from pcl.ui.widgets.toast import show_toast
+
+            show_toast(self, str(error), "error")
+            return
+        show_crash_report(self, report)
 
     def closeEvent(self, event) -> None:  # noqa: N802
         try:

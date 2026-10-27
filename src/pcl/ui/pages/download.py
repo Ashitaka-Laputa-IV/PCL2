@@ -20,6 +20,7 @@ from pcl.core.errors import friendly_message
 from pcl.services import AppContext
 from pcl.ui.dialogs.import_modpack import ImportModpackDialog
 from pcl.ui.pages.base import BasePage
+from pcl.ui.pages.community import CommunityBrowser
 from pcl.ui.widgets.animated_button import AnimatedButton
 from pcl.ui.widgets.card import Card
 from pcl.ui.widgets.progress import GradientProgressBar
@@ -68,6 +69,9 @@ class DownloadPage(BasePage):
         self._tabs.addTab(self._build_loader_tab(), "模组加载器")
         self._tabs.addTab(self._build_modpack_tab(), "整合包")
         self._tabs.addTab(self._build_resource_tab(), "资源")
+        self._community = CommunityBrowser(self.context, self.tasks, self)
+        self._tabs.addTab(self._community, "社区资源")
+        self._tabs.currentChanged.connect(self._on_tab_changed)
         outer.addWidget(self._tabs, 1)
 
         status = QHBoxLayout()
@@ -225,6 +229,12 @@ class DownloadPage(BasePage):
     # ---------- 版本清单 ----------
     def refresh(self) -> None:
         self._load_manifest()
+        if self._tabs.currentIndex() == 4:
+            self._community.refresh()
+
+    def _on_tab_changed(self, index: int) -> None:
+        if index == 4:
+            self._community.refresh()
 
     def _load_manifest(self, force: bool = False) -> None:
         if self._manifest is not None and not force:

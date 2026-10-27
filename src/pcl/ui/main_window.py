@@ -26,7 +26,9 @@ from pcl.ui.pages.base import BasePage
 from pcl.ui.pages.content import ContentPage
 from pcl.ui.pages.download import DownloadPage
 from pcl.ui.pages.home import HomePage
+from pcl.ui.pages.instance_detail import InstanceDetailPage
 from pcl.ui.pages.instances import InstancesPage
+from pcl.ui.pages.more import MorePage
 from pcl.ui.pages.settings import SettingsPage
 from pcl.ui.widgets.progress import GradientProgressBar
 from pcl.ui.widgets.title_bar import TitleBar
@@ -41,6 +43,7 @@ NAV_ITEMS = (
     ("download", "download", "下载"),
     ("content", "content", "资源管理"),
     ("settings", "settings", "设置"),
+    ("more", "more", "更多"),
 )
 
 
@@ -109,9 +112,7 @@ class Sidebar(QWidget):
             button = NavButton(icon_name, label, self)
             self.buttons[key] = button
             layout.addWidget(button, 0, Qt.AlignmentFlag.AlignHCenter)
-            if key == "settings":
-                layout.addStretch(1)
-        layout.addStretch(0)
+        layout.addStretch(1)
 
     def set_active(self, key: str) -> None:
         for name, button in self.buttons.items():
@@ -253,16 +254,38 @@ class MainWindow(QMainWindow):
             "download": DownloadPage,
             "content": ContentPage,
             "settings": SettingsPage,
+            "more": MorePage,
+            "detail": InstanceDetailPage,
         }
         for key, factory in factories.items():
             page = factory(self.context, self.bridge, self.tasks, self)
             self.pages[key] = page
             self.stack.addWidget(page)
 
+    def open_instance_detail(self, instance_id: str) -> None:
+        """打开指定实例的详情页。"""
+        try:
+            instance = self.context.instances.get(instance_id)
+        except Exception as error:
+            show_toast(self, friendly_message(error), "error")
+            return
+        self.context.select_instance(instance.id)
+        detail = self.pages.get("detail")
+        if detail is not None and hasattr(detail, "open_instance"):
+            detail.open_instance(instance)
+        self.navigate("detail")
+
     def navigate(self, key: str) -> None:
         page = self.pages.get(key)
         if page is None:
             return
+        if key == "detail" and hasattr(page, "instance") and page.instance is None:
+            instance = self.context.current_instance()
+            if instance is None:
+                show_toast(self, "还没有实例，请先新建一个。", "warning")
+                self.navigate("instances")
+                return
+            page.open_instance(instance)
         if key == self._current_page:
             page.refresh()
             return

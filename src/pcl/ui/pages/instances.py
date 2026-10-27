@@ -103,15 +103,19 @@ class InstanceCard(Card):
         actions.setSpacing(8)
         launch = AnimatedButton("启动", self, variant="primary", icon_name="play", height=32)
         launch.clicked.connect(lambda: page.launch_instance(instance))
+        detail = AnimatedButton("详情", self, variant="secondary", height=32)
+        detail.clicked.connect(lambda: page.open_detail(instance))
         more = AnimatedButton("更多", self, variant="secondary", height=32)
         more.clicked.connect(lambda: self._show_menu(more))
         actions.addWidget(launch)
+        actions.addWidget(detail)
         actions.addWidget(more)
         actions.addStretch(1)
         self.body.addLayout(actions)
 
     def _show_menu(self, anchor: QWidget) -> None:
         menu = QMenu(self)
+        menu.addAction("详情与设置", lambda: self.page.open_detail(self.instance))
         menu.addAction("打开游戏目录", lambda: self.page.open_game_dir(self.instance))
         menu.addAction("重命名", lambda: self.page.rename_instance(self.instance))
         menu.addAction("复制实例", lambda: self.page.duplicate_instance(self.instance))
@@ -119,6 +123,10 @@ class InstanceCard(Card):
         menu.addSeparator()
         menu.addAction("删除实例", lambda: self.page.delete_instance(self.instance))
         menu.exec(anchor.mapToGlobal(anchor.rect().bottomLeft()))
+
+    def mouseDoubleClickEvent(self, event) -> None:  # noqa: N802
+        self.page.open_detail(self.instance)
+        super().mouseDoubleClickEvent(event)
 
 
 class InstancesPage(BasePage):
@@ -211,6 +219,13 @@ class InstancesPage(BasePage):
             self._cards.append(card)
 
     # ---------- 操作 ----------
+    def open_detail(self, instance: Instance) -> None:
+        window = self.window()
+        if hasattr(window, "open_instance_detail"):
+            window.open_instance_detail(instance.id)
+        else:
+            show_toast(self, "无法打开实例详情", "error")
+
     def launch_instance(self, instance: Instance) -> None:
         try:
             self.context.select_instance(instance.id)
